@@ -1,0 +1,136 @@
+"""Typed personal events with versioned dataclasses and JSONL serialization.
+
+Event types: note, message, calendar_item, file_touch, feedback_tap,
+timer_fire, user_utterance.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from typing import Any, Literal
+
+from famulix.envelope import Envelope
+from famulix.types import EventId
+from famulix.utils import content_id, stable_json_dumps
+
+EventType = Literal[
+    "note",
+    "message",
+    "calendar_item",
+    "file_touch",
+    "feedback_tap",
+    "timer_fire",
+    "user_utterance",
+]
+
+
+@dataclass(frozen=True)
+class Event:
+    """A single personal event with a content-addressed id."""
+
+    event_id: EventId
+    event_type: EventType
+    timestamp_s: int
+    source: str
+    data: dict[str, Any]
+    version: int = 1
+
+    @classmethod
+    def create(
+        cls,
+        event_type: EventType,
+        timestamp_s: int,
+        source: str,
+        data: dict[str, Any],
+    ) -> Event:
+        payload = stable_json_dumps(
+            {
+                "event_type": event_type,
+                "timestamp_s": timestamp_s,
+                "source": source,
+                "data": data,
+            }
+        )
+        eid = content_id("evt", payload)
+        return cls(
+            event_id=eid,
+            event_type=event_type,
+            timestamp_s=timestamp_s,
+            source=source,
+            data=data,
+        )
+
+    def to_envelope(self) -> Envelope:
+        return Envelope.wrap("event", asdict(self))
+
+    @classmethod
+    def from_envelope(cls, env: Envelope) -> Event:
+        if env.kind != "event":
+            raise ValueError(f"Expected event envelope, got {env.kind}")
+        p = env.payload
+        return cls(
+            event_id=p["event_id"],
+            event_type=p["event_type"],
+            timestamp_s=int(p["timestamp_s"]),
+            source=p["source"],
+            data=p["data"],
+            version=int(p.get("version", 1)),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def note_event(timestamp_s: int, source: str, text: str) -> Event:
+    """Build a note event."""
+    return Event.create("note", timestamp_s, source, {"text": text})
+
+
+def message_event(
+    timestamp_s: int,
+    source: str,
+    direction: Literal["in", "out"],
+    counterpart: str,
+    text: str,
+) -> Event:
+    return Event.create(
+        "message",
+        timestamp_s,
+        source,
+        {"direction": direction, "counterpart": counterpart, "text": text},
+    )
+
+
+def calendar_event(
+    timestamp_s: int,
+    source: str,
+    title: str,
+    start_s: int,
+    end_s: int,
+    attendees: list[str] | None = None,
+) -> Event:
+    return Event.create(
+        "calendar_item",
+        timestamp_s,
+        source,
+        {
+            "title": title,
+            "start_s": start_s,
+            "end_s": end_s,
+            "attendees": attendees or [],
+        },
+    )
+
+
+def feedback_event(
+    timestamp_s: int,
+    source: str,
+    target_id: str,
+    rating: Literal["up", "down", "skip"],
+) -> Event:
+    return Event.create(
+        "feedback_tap",
+        timestamp_s,
+        source,
+        {"target_id": target_id, "rating": rating},
+    )
