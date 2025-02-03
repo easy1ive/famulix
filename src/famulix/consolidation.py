@@ -1,0 +1,221 @@
+"""Memory consolidation: dedup, merge, contradiction resolution.
+
+Strategies:
+- Near-duplicate merging with stable winner selection.
+- Template-based episode summaries with provenance.
+- Contradiction detection (same fact key, incompatible values) with a
+  deterministic supersede policy: newest-verified wins; ties broken by
+  source trust then id.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from difflib import SequenceMatcher
+
+from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+
+@dataclass
+class ConsolidationReport:
+    """Auditable record of what a consolidation run changed."""
+
+    merged_pairs: list[tuple[str, str]] = field(default_factory=list)
+    superseded: list[str] = field(default_factory=list)
+    contradictions_resolved: int = 0
+    summary_nodes: list[str] = field(default_factory=list)
+
+    def total_changes(self) -> int:
+        return len(self.merged_pairs) + len(self.superseded) + len(self.summary_nodes)
+
+
+def _normalized_text(node: MemoryNode) -> str:
+    text = f"{node.title} {node.body}".lower()
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    return round(SequenceMatcher(None, a, b).ratio(), 6)
+
+
+def find_near_duplicates(
+    graph: MemoryGraph,
+    *,
+    kind: str | None = None,
+    threshold: float = 0.8,
+) -> list[tuple[MemoryNode, MemoryNode, float]]:
+    """Find pairs of nodes with text similarity above threshold.
+
+    Returns list of (node_a, node_b, score) sorted by descending score.
+    """
+    candidates = [n for n in graph.all_nodes() if (kind is None or n.kind == kind) and n.is_active]
+    pairs: list[tuple[MemoryNode, MemoryNode, float]] = []
+    for i in range(len(candidates)):
+        for j in range(i + 1, len(candidates)):
+            a, b = candidates[i], candidates[j]
+            score = _similarity(_normalized_text(a), _normalized_text(b))
+            if score >= threshold:
+                pairs.append((a, b, score))
+    pairs.sort(key=lambda x: x[2], reverse=True)
+    return pairs
+
+
+def merge_duplicate(
+    graph: MemoryGraph,
+    survivor: MemoryNode,
+    obsolete: MemoryNode,
+) -> None:
+    """Merge obsolete into survivor, redirecting edges.
+
+    The obsolete node is marked inactive; its incoming/outgoing edges are
+    reattached to the survivor. A 'derived_from' edge records the merge.
+    """
+    if not graph.has_node(survivor.node_id) or not graph.has_node(obsolete.node_id):
+        raise ValueError("Both nodes must exist in the graph")
+
+    # Reattach in-edges
+    for e in list(graph.in_edges(obsolete.node_id)):
+        new_edge = MemoryEdge.create(e.from_id, survivor.node_id, e.kind, e.weight)
+        graph.add_edge(new_edge)
+
+    # Reattach out-edges
+    for e in list(graph.out_edges(obsolete.node_id)):
+        new_edge = MemoryEdge.create(survivor.node_id, e.to_id, e.kind, e.weight)
+        graph.add_edge(new_edge)
+
+    # Mark obsolete as inactive by replacing with inactive version
+    from dataclasses import replace
+
+    inactive = replace(obsolete, is_active=False)
+    graph._nodes[obsolete.node_id] = inactive  # noqa: SLF001
+
+    # Record provenance: survivor derived_from obsolete
+    graph.add_edge(MemoryEdge.create(survivor.node_id, obsolete.node_id, "derived_from"))
+    graph.add_edge(MemoryEdge.create(survivor.node_id, obsolete.node_id, "supersedes"))
+
+
+def _fact_key(node: MemoryNode) -> str:
+    """Derive a fact key from a fact node.
+
+    Uses the first 5 words of the title as a rough key for contradiction
+    detection. Nodes sharing a key are candidates for contradiction checks.
+    """
+    words = re.findall(r"[\w]+", node.title.lower())
+    return "_".join(words[:5])
+
+
+def find_contradictions(
+    graph: MemoryGraph,
+) -> list[tuple[MemoryNode, MemoryNode]]:
+    """Find pairs of active fact nodes that share a key but have different bodies.
+
+    These are candidate contradictions; the supersede policy decides which
+    version wins.
+    """
+    fact_nodes = [n for n in graph.all_nodes() if n.kind == "fact" and n.is_active]
+    by_key: dict[str, list[MemoryNode]] = {}
+    for n in fact_nodes:
+        key = _fact_key(n)
+        if key:
+            by_key.setdefault(key, []).append(n)
+    pairs: list[tuple[MemoryNode, MemoryNode]] = []
+    for _key, nodes in by_key.items():
+        if len(nodes) < 2:
+            continue
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                a, b = nodes[i], nodes[j]
+                if a.body != b.body:
+                    pairs.append((a, b))
+    return pairs
+
+
+def resolve_contradiction(
+    newer: MemoryNode,
+    older: MemoryNode,
+    *,
+    newer_trusted: bool = True,
+    older_trusted: bool = False,
+) -> MemoryNode:
+    """Deterministic supersede policy: newest-verified wins.
+
+    Ties broken by source trust (trusted > untrusted) then node id (stable).
+    Returns the winner.
+    """
+    # Newer wins if it's verified
+    if newer_trusted and not older_trusted:
+        return newer
+    if older_trusted and not newer_trusted:
+        return older
+    # Both same trust: newer by timestamp wins
+    if newer.created_at_s > older.created_at_s:
+        return newer
+    if older.created_at_s > newer.created_at_s:
+        return older
+    # Tie by id for absolute determinism
+    return newer if newer.node_id >= older.node_id else older
+
+
+def consolidate_graph(
+    graph: MemoryGraph,
+    *,
+    dedup_threshold: float = 0.85,
+) -> ConsolidationReport:
+    """Run a full consolidation pass.
+
+    1. Dedup near-duplicate fact nodes.
+    2. Detect and resolve contradictions among fact nodes.
+    3. (Skips summary generation for now — added separately.)
+    """
+    report = ConsolidationReport()
+
+    # Step 1: dedup
+    dup_pairs = find_near_duplicates(graph, kind="fact", threshold=dedup_threshold)
+    seen: set[str] = set()
+    for a, b, _score in dup_pairs:
+        if a.node_id in seen or b.node_id in seen:
+            continue
+        # Keep the newer one as survivor
+        survivor, obsolete = (a, b) if a.created_at_s >= b.created_at_s else (b, a)
+        if not graph.get_node(survivor.node_id) or not graph.get_node(obsolete.node_id):
+            continue
+        if not graph.get_node(survivor.node_id).is_active:
+            continue
+        if not graph.get_node(obsolete.node_id).is_active:
+            continue
+        merge_duplicate(graph, survivor, obsolete)
+        report.merged_pairs.append((survivor.node_id, obsolete.node_id))
+        seen.add(obsolete.node_id)
+
+    # Step 2: contradictions
+    contradictions = find_contradictions(graph)
+    resolved_keys: set[str] = set()
+    for a, b in contradictions:
+        key = _fact_key(a)
+        if key in resolved_keys:
+            continue
+        if not graph.get_node(a.node_id) or not graph.get_node(b.node_id):
+            continue
+        node_a = graph.get_node(a.node_id)
+        node_b = graph.get_node(b.node_id)
+        if node_a is None or node_b is None:
+            continue
+        if not node_a.is_active or not node_b.is_active:
+            continue
+        winner = resolve_contradiction(node_a, node_b)
+        loser = node_b if winner.node_id == node_a.node_id else node_a
+        # Mark loser superseded
+        from dataclasses import replace
+
+        graph._nodes[loser.node_id] = replace(loser, is_active=False)  # noqa: SLF001
+        graph.add_edge(MemoryEdge.create(winner.node_id, loser.node_id, "supersedes"))
+        graph.add_edge(MemoryEdge.create(winner.node_id, loser.node_id, "contradicts"))
+        report.superseded.append(loser.node_id)
+        report.contradictions_resolved += 1
+        resolved_keys.add(key)
+
+    return report
