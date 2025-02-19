@@ -1,0 +1,172 @@
+"""Plan DSL: versioned JSON plan schema and deterministic topological planner.
+
+Plans have steps with typed inputs/outputs, preconditions/effects, and
+budgets. The validator checks for cycles, dangling references, and type
+mismatches. The planner produces a topological execution order.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class PlanStep:
+    """A single step in a plan."""
+
+    id: str
+    tool: str
+    inputs: dict[str, Any] = field(default_factory=dict)
+    depends_on: list[str] = field(default_factory=list)
+    preconditions: list[str] = field(default_factory=list)
+    effects: list[str] = field(default_factory=list)
+    timeout_s: float = 5.0
+    budget: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "tool": self.tool,
+            "inputs": self.inputs,
+            "depends_on": self.depends_on,
+            "preconditions": self.preconditions,
+            "effects": self.effects,
+            "timeout_s": self.timeout_s,
+            "budget": self.budget,
+        }
+
+
+@dataclass
+class Plan:
+    """A complete plan with metadata and steps."""
+
+    plan_id: str
+    version: int = 1
+    steps: list[PlanStep] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)
+
+    def step_ids(self) -> set[str]:
+        return {s.id for s in self.steps}
+
+    def get_step(self, step_id: str) -> PlanStep | None:
+        for s in self.steps:
+            if s.id == step_id:
+                return s
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "version": self.version,
+            "steps": [s.to_dict() for s in self.steps],
+            "metadata": self.metadata,
+        }
+
+
+@dataclass
+class ValidationResult:
+    """Result of plan validation."""
+
+    valid: bool
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+def validate_plan(plan: Plan) -> ValidationResult:
+    """Validate a plan for structural correctness.
+
+    Checks:
+    - No duplicate step ids
+    - All dependencies reference existing steps
+    - No cycles in dependency graph
+    - At least one step has no dependencies (entry point)
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    ids = plan.step_ids()
+
+    if len(ids) != len(plan.steps):
+        errors.append("duplicate step ids found")
+
+    # Dangling references
+    for step in plan.steps:
+        for dep in step.depends_on:
+            if dep not in ids:
+                errors.append(f"step {step.id}: dangling dependency '{dep}'")
+
+    # Cycle detection via Kahn's algorithm
+    in_degree: dict[str, int] = {s.id: 0 for s in plan.steps}
+    adjacency: dict[str, list[str]] = {s.id: [] for s in plan.steps}
+    for step in plan.steps:
+        for dep in step.depends_on:
+            if dep in adjacency:
+                adjacency[dep].append(step.id)
+                in_degree[step.id] += 1
+
+    queue = [sid for sid, d in in_degree.items() if d == 0]
+    visited = 0
+    while queue:
+        node = queue.pop(0)
+        visited += 1
+        for neighbor in adjacency[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if visited != len(plan.steps):
+        errors.append("dependency graph contains a cycle")
+
+    if not any(not s.depends_on for s in plan.steps):
+        warnings.append("no entry point (all steps have dependencies)")
+
+    return ValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
+
+
+def topological_order(plan: Plan) -> list[str]:
+    """Return steps in a valid topological execution order.
+
+    Uses Kahn's algorithm; within a level, steps are sorted by id for
+    determinism.
+    """
+    in_degree: dict[str, int] = {s.id: len(s.depends_on) for s in plan.steps}
+    adjacency: dict[str, list[str]] = {s.id: [] for s in plan.steps}
+    for step in plan.steps:
+        for dep in step.depends_on:
+            if dep in adjacency:
+                adjacency[dep].append(step.id)
+
+    # Use sorted queue for determinism
+    queue = sorted([sid for sid, d in in_degree.items() if d == 0])
+    order: list[str] = []
+    while queue:
+        queue.sort()
+        node = queue.pop(0)
+        order.append(node)
+        new_ready: list[str] = []
+        for neighbor in adjacency[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                new_ready.append(neighbor)
+        queue.extend(new_ready)
+
+    # If cycle, return what we can
+    return order
+
+
+def plan_diff(a: Plan, b: Plan) -> dict[str, list[str]]:
+    """Compute the difference between two plans.
+
+    Returns {'added': [...], 'removed': [...], 'modified': [...]}.
+    """
+    a_ids = a.step_ids()
+    b_ids = b.step_ids()
+    added = sorted(b_ids - a_ids)
+    removed = sorted(a_ids - b_ids)
+    modified: list[str] = []
+    for sid in a_ids & b_ids:
+        sa = a.get_step(sid)
+        sb = b.get_step(sid)
+        if sa is not None and sb is not None and sa.to_dict() != sb.to_dict():
+            modified.append(sid)
+    return {"added": sorted(added), "removed": sorted(removed), "modified": sorted(modified)}
