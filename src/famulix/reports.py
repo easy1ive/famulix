@@ -104,7 +104,7 @@ svg { max-width: 100%; height: auto; }
             parts.append("<p><em>No items.</em></p>")
         else:
             parts.append("<ul>")
-            for label, value in section.items():
+            for label, value in section.items:
                 parts.append(
                     f"<li><strong>{escape_html(label)}</strong>: {escape_html(value)}</li>"
                 )
