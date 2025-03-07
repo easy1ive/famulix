@@ -1,0 +1,243 @@
+"""Daily briefing application — the flagship offline app.
+
+Pipeline: gather → select → compose → cite. Produces a self-contained
+HTML + SVG briefing where every item cites the memory ids it used.
+Includes agenda, commitments, reminders, and recent memory sections.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from famulix.context import ContextItem, assemble_context, estimate_tokens
+from famulix.memory_graph import MemoryGraph
+from famulix.reports import (
+    ReportSection,
+    run_metadata,
+    svg_day_ribbon,
+    svg_heatmap,
+)
+from famulix.retrieval import BM25Index, hybrid_score
+from famulix.salience import score_all_nodes
+
+
+@dataclass
+class BriefingItem:
+    """A single item in the briefing with citation."""
+
+    title: str
+    body: str
+    section: str
+    memory_ids: list[str] = field(default_factory=list)
+    priority: float = 0.5
+
+
+@dataclass
+class Briefing:
+    """A complete daily briefing."""
+
+    title: str
+    date_str: str
+    items: list[BriefingItem] = field(default_factory=list)
+    sections: list[str] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)
+    limitations: list[str] = field(default_factory=list)
+
+    def all_cited_memory_ids(self) -> set[str]:
+        ids: set[str] = set()
+        for item in self.items:
+            ids.update(item.memory_ids)
+        return ids
+
+    def citations_resolve(self, graph: MemoryGraph) -> bool:
+        """Check that all cited memory ids point to existing, non-deleted nodes."""
+        for mid in self.all_cited_memory_ids():
+            node = graph.get_node(mid)
+            if node is None:
+                return False
+            if not node.is_active:
+                return False
+            if node.metadata.get("deleted") == "true":
+                return False
+        return True
+
+
+def _build_index(graph: MemoryGraph) -> BM25Index:
+    idx = BM25Index()
+    for node in graph.all_nodes():
+        if node.is_active and node.kind in {"fact", "episode", "reminder", "goal"}:
+            idx.add_node(node)
+    return idx
+
+
+def gather_memories(
+    graph: MemoryGraph,
+    *,
+    now_s: int,
+    budget_tokens: int = 500,
+) -> list[BriefingItem]:
+    """Gather and select memories for the briefing within a token budget."""
+    idx = _build_index(graph)
+    results = hybrid_score(
+        "today agenda commitments reminders",
+        graph=graph,
+        index=idx,
+        now_s=now_s,
+    )
+
+    # Convert to context items
+    context_items: list[ContextItem] = []
+    for r in results[:30]:
+        node = graph.get_node(r.node_id)
+        if node is None:
+            continue
+        text = f"{node.title}: {node.body}"
+        context_items.append(
+            ContextItem(
+                item_id=node.node_id,
+                token_estimate=estimate_tokens(text),
+                value=r.score,
+                payload=text,
+            )
+        )
+
+    assembled = assemble_context(context_items, budget=budget_tokens)
+    items: list[BriefingItem] = []
+    for ci in assembled.items:
+        node = graph.get_node(ci.item_id)
+        if node is None:
+            continue
+        section = "recent_memories"
+        if node.kind == "reminder":
+            section = "reminders"
+        elif node.kind == "goal":
+            section = "commitments"
+        items.append(
+            BriefingItem(
+                title=node.title,
+                body=node.body,
+                section=section,
+                memory_ids=[node.node_id],
+                priority=ci.value,
+            )
+        )
+    return items
+
+
+def _section_order(section: str) -> int:
+    order = {"agenda": 0, "commitments": 1, "reminders": 2, "recent_memories": 3}
+    return order.get(section, 99)
+
+
+def build_briefing(
+    graph: MemoryGraph,
+    *,
+    date_str: str,
+    now_s: int,
+    budget_tokens: int = 500,
+    version: str = "0.1.0",
+    seed: int = 0,
+    config_hash: str = "",
+    extra_limitations: list[str] | None = None,
+) -> Briefing:
+    """Build a complete daily briefing."""
+    items = gather_memories(graph, now_s=now_s, budget_tokens=budget_tokens)
+
+    # Group by section
+    section_names = sorted({it.section for it in items}, key=_section_order)
+
+    # Sort items by section order then priority
+    items.sort(key=lambda it: (_section_order(it.section), -it.priority))
+
+    limitations = [
+        "All content generated from synthetic memory data.",
+        "No external model calls — deterministic rule-based pipeline.",
+        "Scores reflect salience heuristics, not real relevance judgments.",
+    ]
+    if extra_limitations:
+        limitations.extend(extra_limitations)
+
+    meta = run_metadata(
+        version=version,
+        seed=seed,
+        config_hash=config_hash,
+        extra={"date": date_str, "budget_tokens": str(budget_tokens)},
+    )
+
+    return Briefing(
+        title=f"Daily Briefing — {date_str}",
+        date_str=date_str,
+        items=items,
+        sections=section_names,
+        metadata=meta,
+        limitations=limitations,
+    )
+
+
+def render_briefing_markdown(briefing: Briefing) -> str:
+    """Render the briefing as Markdown."""
+    from famulix.reports import render_markdown as render_md
+
+    sections_by_name: dict[str, list[tuple[str, str]]] = {}
+    for item in briefing.items:
+        sections_by_name.setdefault(item.section, [])
+        cites = ", ".join(item.memory_ids[:3])
+        label = item.title
+        value = f"{item.body} (cited: {cites})"
+        sections_by_name[item.section].append((label, value))
+
+    report_sections: list[ReportSection] = []
+    for section_name in briefing.sections:
+        items = sections_by_name.get(section_name, [])
+        report_sections.append(ReportSection(title=section_name, items=items))
+
+    # Add limitations section
+    lim_items = [("limitation", lim) for lim in briefing.limitations]
+    report_sections.append(ReportSection(title="limitations", items=lim_items))
+
+    return render_md(briefing.title, report_sections, metadata=briefing.metadata)
+
+
+def render_briefing_html(
+    briefing: Briefing,
+    *,
+    graph: MemoryGraph | None = None,
+) -> str:
+    """Render the briefing as self-contained HTML with SVG visuals."""
+    from famulix.reports import render_html as render_htm
+
+    sections_by_name: dict[str, list[tuple[str, str]]] = {}
+    for item in briefing.items:
+        sections_by_name.setdefault(item.section, [])
+        cites = ", ".join(item.memory_ids[:3])
+        sections_by_name[item.section].append((item.title, f"{item.body} [{cites}]"))
+
+    report_sections: list[ReportSection] = []
+    for section_name in briefing.sections:
+        items = sections_by_name.get(section_name, [])
+        report_sections.append(ReportSection(title=section_name, items=items))
+
+    # Add limitations
+    lim_items = [("limitation", lim) for lim in briefing.limitations]
+    report_sections.append(ReportSection(title="limitations", items=lim_items))
+
+    # SVG charts
+    svg_charts: list[str] = []
+    if graph is not None:
+        # Day activity ribbon (synthetic placeholder from salience distribution)
+        scores = score_all_nodes(graph, now_s=int(briefing.metadata.get("seed", "0")) or 0)
+        hour_vals = [0.0] * 24
+        for i, s in enumerate(list(scores.values())[:24]):
+            hour_vals[i % 24] = s
+        svg_charts.append(svg_day_ribbon(hour_vals))
+
+        # Simple heatmap (7 days × 24 hours placeholder)
+        heat_data = [[float((d * 24 + h) % 10) / 10 for h in range(24)] for d in range(7)]
+        svg_charts.append(svg_heatmap(heat_data, title="7-day retention heatmap"))
+
+    return render_htm(
+        briefing.title,
+        report_sections,
+        metadata=briefing.metadata,
+        svg_charts=svg_charts,
+    )
