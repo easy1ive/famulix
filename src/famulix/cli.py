@@ -385,7 +385,7 @@ def cmd_privacy(args: argparse.Namespace) -> int:
         findings = detect_pii(text)
         print(f"Found {len(findings)} PII items:")
         for f in findings:
-            print(f"  {f.kind}: {f.text} (pos {f.start}-{f.end})")
+            print(f"  {f.pii_type}: {f.text} (pos {f.start}-{f.end})")
     else:
         redacted = redact_text(text)
         print(f"Original: {text}")
