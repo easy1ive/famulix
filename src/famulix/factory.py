@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import random
 from dataclasses import dataclass, field
+from typing import Any
 
 from famulix.clock import day_start_epoch
 from famulix.events import (
@@ -146,6 +147,24 @@ class HistoryFactory:
                 by_type[evt.event_type] = by_type.get(evt.event_type, 0) + 1
             events.extend(day_events)
 
+        # Add planted facts as notes at specific days
+        planted_facts = self._generate_planted_facts(day_epoch, day_seconds)
+        for evt in planted_facts:
+            by_type[evt.event_type] = by_type.get(evt.event_type, 0) + 1
+        events.extend(planted_facts)
+
+        # Add planted contradictions (conflicting facts at different times)
+        planted_contradictions = self._generate_planted_contradictions(day_epoch, day_seconds)
+        for evt in planted_contradictions:
+            by_type[evt.event_type] = by_type.get(evt.event_type, 0) + 1
+        events.extend(planted_contradictions)
+
+        # Add planted preference signals (feedback taps)
+        planted_prefs = self._generate_planted_preferences(day_epoch, day_seconds)
+        for evt in planted_prefs:
+            by_type[evt.event_type] = by_type.get(evt.event_type, 0) + 1
+        events.extend(planted_prefs)
+
         events.sort(key=lambda e: (e.timestamp_s, e.event_id))
 
         total_count = len(events)
@@ -158,9 +177,9 @@ class HistoryFactory:
         )
         end_date_str = end_dt.date().isoformat()
 
-        planted_fact_count = self.days * 2  # approx 2 planted facts per day
-        planted_contradiction_count = max(1, self.days // 14)
-        planted_preference_count = max(3, self.days // 7)
+        planted_fact_count = len(planted_facts)
+        planted_contradiction_count = len(planted_contradictions) // 2
+        planted_preference_count = len(planted_prefs)
 
         manifest = HistoryManifest(
             persona_id=self.persona.persona_id,
@@ -358,6 +377,153 @@ class HistoryFactory:
         for evt in events:
             h.update(evt.event_id.encode())
         return h.hexdigest()[:16]
+
+    def _generate_planted_facts(self, day_epoch: int, day_seconds: int) -> list[Event]:
+        """Generate deliberately planted fact notes at known positions."""
+        facts: list[Event] = []
+        fact_templates = [
+            ("home address", "Lives at 123 Oak Street, Apt 4B"),
+            ("phone number", "Phone ends with 5678"),
+            ("favorite color", "Favorite color is navy blue"),
+            ("coffee order", "Always orders oat milk latte"),
+            ("gym schedule", "Gym is at 6am on Mon/Wed/Fri"),
+            ("project name", "Main project is codenamed Horizon"),
+            ("sister name", "Sister is named Riley"),
+            ("birthday month", "Birthday is in July"),
+            ("pet name", "Has a cat named Mochi"),
+            ("commute time", "Commute is 45 minutes by train"),
+        ]
+        count = max(2, self.days // 15)
+        rng = random.Random(self._seed_val + 1000)
+        for i in range(count):
+            template_idx = i % len(fact_templates)
+            title, body = fact_templates[template_idx]
+            day_offset = rng.randint(0, max(0, self.days - 1))
+            hour = rng.randint(9, 20)
+            minute = rng.randint(0, 59)
+            ts = day_epoch + day_offset * day_seconds + hour * 3600 + minute * 60
+            text = f"{title}: {body}"
+            facts.append(note_event(ts, "laptop", text))
+        return facts
+
+    def _generate_planted_contradictions(self, day_epoch: int, day_seconds: int) -> list[Event]:
+        """Generate pairs of conflicting facts at different times.
+
+        The newer fact should supersede the older one in consolidation.
+        """
+        events: list[Event] = []
+        contradiction_pairs = [
+            (
+                "home address",
+                "Lives at 123 Oak Street, Apt 4B",
+                "home address",
+                "Lives at 456 Pine Avenue, Suite 12",
+            ),
+            (
+                "meeting cadence",
+                "Team meets every Monday at 10am",
+                "meeting cadence",
+                "Team meets every Tuesday at 2pm",
+            ),
+            (
+                "reminder time",
+                "Doctor appointment is March 15 at 9am",
+                "reminder time",
+                "Doctor appointment rescheduled to March 20 at 2pm",
+            ),
+        ]
+        pair_count = max(1, min(len(contradiction_pairs), self.days // 30))
+        rng = random.Random(self._seed_val + 2000)
+        for i in range(pair_count):
+            old_title, old_body, new_title, new_body = contradiction_pairs[i]
+            # old fact in first third of period
+            old_day = rng.randint(0, max(0, self.days // 3))
+            # new fact in last third of period
+            new_day = rng.randint(2 * self.days // 3, max(0, self.days - 1))
+            old_ts = day_epoch + old_day * day_seconds + 10 * 3600
+            new_ts = day_epoch + new_day * day_seconds + 14 * 3600
+            events.append(note_event(old_ts, "phone", f"{old_title}: {old_body}"))
+            events.append(note_event(new_ts, "laptop", f"{new_title}: {new_body}"))
+        return events
+
+    def _generate_planted_preferences(self, day_epoch: int, day_seconds: int) -> list[Event]:
+        """Generate planted preference feedback signals."""
+        events: list[Event] = []
+        pref_targets = [
+            ("brief_style", "concise"),
+            ("brief_style", "detailed"),
+            ("morning_preference", "early"),
+            ("topic_priority", "work"),
+            ("topic_priority", "personal"),
+        ]
+        count = max(5, self.days // 10)
+        rng = random.Random(self._seed_val + 3000)
+        for i in range(count):
+            target_key, target_val = pref_targets[i % len(pref_targets)]
+            day_offset = rng.randint(0, max(0, self.days - 1))
+            hour = rng.randint(8, 22)
+            minute = rng.randint(0, 59)
+            ts = day_epoch + day_offset * day_seconds + hour * 3600 + minute * 60
+            # Create a feedback event referencing a memory-like target id
+            target_id = f"pref_{target_key}_{target_val}"
+            rating = "up" if rng.random() > 0.3 else "down"
+            events.append(
+                Event.create(
+                    "feedback_tap",
+                    ts,
+                    self._choice(self.persona.device_mix),
+                    {
+                        "target_id": target_id,
+                        "rating": rating,
+                        "preference_key": target_key,
+                        "preference_value": target_val,
+                    },
+                )
+            )
+        return events
+
+    def planted_ground_truth(self, start_date: str = "2026-01-01") -> dict[str, Any]:
+        """Return ground truth about planted items for evaluation.
+
+        This is the reference the evaluation harness compares against.
+        """
+        day_epoch = day_start_epoch(start_date, self.persona.timezone_offset)
+        day_seconds = 86400
+        facts = self._generate_planted_facts(day_epoch, day_seconds)
+        contradictions = self._generate_planted_contradictions(day_epoch, day_seconds)
+        prefs = self._generate_planted_preferences(day_epoch, day_seconds)
+        return {
+            "fact_ids": [e.event_id for e in facts],
+            "contradiction_pairs": [
+                (contradictions[i].event_id, contradictions[i + 1].event_id)
+                for i in range(0, len(contradictions), 2)
+            ],
+            "preference_signals": [
+                {
+                    "event_id": e.event_id,
+                    "key": e.data.get("preference_key", ""),
+                    "value": e.data.get("preference_value", ""),
+                    "rating": e.data.get("rating", ""),
+                }
+                for e in prefs
+            ],
+        }
+
+
+def generate_history_with_truth(
+    persona_id: str = "alex",
+    seed: int = 0,
+    days: int = 90,
+    start_date: str = "2026-01-01",
+) -> tuple[list[Event], HistoryManifest, dict[str, Any]]:
+    """Generate history plus ground truth for evaluation."""
+    persona = DEFAULT_PERSONAS.get(persona_id)
+    if persona is None:
+        raise ValueError(f"Unknown persona: {persona_id}")
+    factory = HistoryFactory(persona, seed=seed, days=days)
+    events, manifest = factory.generate(start_date=start_date)
+    truth = factory.planted_ground_truth(start_date=start_date)
+    return events, manifest, truth
 
 
 def generate_history(

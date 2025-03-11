@@ -10,6 +10,7 @@ from famulix.factory import (
     HistoryFactory,
     HistoryManifest,
     generate_history,
+    generate_history_with_truth,
     list_personas,
     persona_digest,
 )
@@ -147,3 +148,66 @@ def test_factory_direct_construction():
     assert manifest.days == 10
     assert manifest.persona_id == "alex"
     assert len(events) > 0
+
+
+def test_planted_facts_present_in_events():
+    events, manifest = generate_history("alex", seed=0, days=60)
+    assert manifest.planted_fact_count > 0
+    assert manifest.planted_contradiction_count > 0
+    assert manifest.planted_preference_count > 0
+    # feedback taps include preference signals
+    assert manifest.by_type.get("feedback_tap", 0) >= manifest.planted_preference_count
+
+
+def test_generate_history_with_truth_returns_ground_truth():
+    events, manifest, truth = generate_history_with_truth("alex", seed=7, days=90)
+    assert "fact_ids" in truth
+    assert "contradiction_pairs" in truth
+    assert "preference_signals" in truth
+    assert len(truth["fact_ids"]) == manifest.planted_fact_count
+    assert len(truth["contradiction_pairs"]) == manifest.planted_contradiction_count
+    assert len(truth["preference_signals"]) == manifest.planted_preference_count
+
+
+def test_planted_fact_ids_exist_in_event_stream():
+    events, _, truth = generate_history_with_truth("alex", seed=42, days=30)
+    event_ids = {e.event_id for e in events}
+    for fid in truth["fact_ids"]:
+        assert fid in event_ids
+    for old_id, new_id in truth["contradiction_pairs"]:
+        assert old_id in event_ids
+        assert new_id in event_ids
+
+
+def test_contradiction_pairs_have_newer_second_event():
+    events, _, truth = generate_history_with_truth("alex", seed=42, days=60)
+    event_by_id = {e.event_id: e for e in events}
+    for old_id, new_id in truth["contradiction_pairs"]:
+        old_evt = event_by_id[old_id]
+        new_evt = event_by_id[new_id]
+        assert new_evt.timestamp_s > old_evt.timestamp_s
+
+
+def test_ground_truth_deterministic():
+    _, _, t1 = generate_history_with_truth("alex", seed=5, days=30)
+    _, _, t2 = generate_history_with_truth("alex", seed=5, days=30)
+    assert t1["fact_ids"] == t2["fact_ids"]
+    assert t1["contradiction_pairs"] == t2["contradiction_pairs"]
+    assert t1["preference_signals"] == t2["preference_signals"]
+
+
+def test_planted_preferences_have_key_value_rating():
+    _, _, truth = generate_history_with_truth("alex", seed=0, days=30)
+    for sig in truth["preference_signals"]:
+        assert "event_id" in sig
+        assert "key" in sig
+        assert "value" in sig
+        assert sig["rating"] in {"up", "down", "skip"}
+
+
+def test_short_history_still_has_planted_items():
+    events, manifest = generate_history("alex", seed=0, days=7)
+    # Even a 1-week history should have some planted content
+    assert manifest.planted_fact_count >= 1
+    assert manifest.planted_contradiction_count >= 1
+    assert manifest.planted_preference_count >= 1
