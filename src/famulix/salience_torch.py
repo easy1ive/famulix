@@ -10,12 +10,12 @@ Marked tests skip cleanly when torch is not installed.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from famulix.memory_graph import MemoryGraph, MemoryNode
 
 if TYPE_CHECKING:
-    import torch  # noqa: F401
+    import torch  # type: ignore[import-not-found]  # noqa: F401
 
 try:
     import torch
@@ -121,7 +121,7 @@ class SalienceMLP:
         x = torch.tensor(features, dtype=torch.float32)
         with torch.no_grad():
             score = self.model(x).item()
-        return round(score, 6)
+        return round(cast(float, score), 6)
 
     def score_all(self, graph: MemoryGraph, now_s: int) -> dict[str, float]:
         """Score all active nodes in a graph."""

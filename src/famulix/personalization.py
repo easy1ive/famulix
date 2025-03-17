@@ -189,11 +189,16 @@ def order_items(
     - alphabetical: by title
     """
     if ordering == "priority":
-        return sorted(items, key=lambda x: float(x.get("priority", 0.5)), reverse=True)
+        return sorted(items, key=lambda x: _number(x.get("priority"), 0.5), reverse=True)
     if ordering == "recency":
-        return sorted(items, key=lambda x: int(x.get("timestamp_s", 0)), reverse=True)
+        return sorted(items, key=lambda x: int(_number(x.get("timestamp_s"), 0)), reverse=True)
     if ordering == "category":
         return sorted(items, key=lambda x: str(x.get("category", "")))
     if ordering == "alphabetical":
         return sorted(items, key=lambda x: str(x.get("title", "")))
     return list(items)
+
+
+def _number(value: object, default: float) -> float:
+    """Read a numeric sort field without accepting arbitrary objects."""
+    return float(value) if isinstance(value, (int, float)) else default

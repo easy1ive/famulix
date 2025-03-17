@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import random
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from famulix.clock import day_start_epoch
 from famulix.events import (
@@ -213,7 +213,7 @@ class HistoryFactory:
         for _ in range(msg_count):
             ts = self._daytime_timestamp(day_start, is_weekend)
             src = self._choice(self.persona.device_mix)
-            direction = "in" if self._rand() > 0.5 else "out"
+            direction: Literal["in", "out"] = "in" if self._rand() > 0.5 else "out"
             counterpart = self._choice(self.persona.relationship_names)
             text = self._random_message_text(counterpart, day_idx)
             events.append(message_event(ts, src, direction, counterpart, text))
