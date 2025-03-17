@@ -204,7 +204,16 @@ def consolidate_graph(
             continue
         if not node_a.is_active or not node_b.is_active:
             continue
-        winner = resolve_contradiction(node_a, node_b)
+        newer, older = sorted(
+            (node_a, node_b), key=lambda node: (node.created_at_s, node.node_id), reverse=True
+        )
+        newer_trusted = node_a.metadata.get("trust") in {"high", "verified"}
+        older_trusted = node_b.metadata.get("trust") in {"high", "verified"}
+        if newer.node_id == node_b.node_id:
+            newer_trusted, older_trusted = older_trusted, newer_trusted
+        winner = resolve_contradiction(
+            newer, older, newer_trusted=newer_trusted, older_trusted=older_trusted
+        )
         loser = node_b if winner.node_id == node_a.node_id else node_a
         # Mark loser superseded
         from dataclasses import replace

@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from famulix.deletion import delete_memory, deletion_audit
+from famulix.deletion import delete_memory
 from famulix.events import note_event
 from famulix.memory_graph import MemoryGraph, MemoryNode
 
@@ -77,9 +77,9 @@ def main() -> int:
 
     report = consolidate_graph(g)
     print("After consolidation:")
-    print(f"  Contradiction pairs detected: {len(report.contradiction_pairs)}")
-    print(f"  Facts superseded: {len(report.superseded_ids)}")
-    print(f"  Facts merged (duplicates): {len(report.merged_ids)}")
+    print(f"  Contradiction pairs resolved: {report.contradictions_resolved}")
+    print(f"  Facts superseded: {len(report.superseded)}")
+    print(f"  Facts merged (duplicates): {len(report.merged_pairs)}")
     print()
 
     # Show resolved state
@@ -97,21 +97,21 @@ def main() -> int:
 
     # Deletion cascade
     print("=== Deletion Cascade Demo ===")
-    print(f"Deleting the active fact ({new_fact.node_id[:12]}...)")
-    delete_memory(g, new_fact.node_id)
-    audit = deletion_audit(g)
-    print(f"  Nodes deleted: {audit.nodes_deleted}")
-    print(f"  Edges deleted: {audit.edges_deleted}")
-    print(f"  Tombstones created: {audit.tombstones}")
+    target_fact = active_facts[0]
+    print(f"Deleting the active fact ({target_fact.node_id[:12]}...)")
+    audit = delete_memory(g, target_fact.node_id)
+    print(f"  Nodes deleted: {len(audit.deleted_nodes)}")
+    print(f"  Edges deleted: {len(audit.deleted_edges)}")
+    print(f"  Tombstones created: {len(audit.tombstone_nodes)}")
 
     # Verify the old superseded fact stays deleted too
     old_node = g.get_node(old_fact.node_id)
-    new_node = g.get_node(new_fact.node_id)
-    print(f"  Old fact still superseded: {old_node is not None and not old_node.is_active}")
-    print(f"  New fact deleted (tombstone): {new_node is not None}")
-    if new_node:
-        print(f"  New fact is_active: {new_node.is_active}")
-        print(f"  New fact metadata deleted: {new_node.metadata.get('deleted')}")
+    target_node = g.get_node(target_fact.node_id)
+    print(f"  Other fact remains inactive: {old_node is not None and not old_node.is_active}")
+    print(f"  Deleted fact retained as tombstone: {target_node is not None}")
+    if target_node:
+        print(f"  Deleted fact is_active: {target_node.is_active}")
+        print(f"  Deleted fact metadata deleted: {target_node.metadata.get('deleted')}")
     print()
 
     print("=== Done ===")

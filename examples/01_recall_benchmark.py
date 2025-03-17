@@ -60,9 +60,9 @@ def main() -> int:
     # Consolidate
     print("Consolidating (dedup + contradiction resolution)...")
     report = consolidate_graph(graph)
-    print(f"  Merged duplicates: {len(report.merged_ids)}")
-    print(f"  Superseded facts: {len(report.superseded_ids)}")
-    print(f"  Contradictions detected: {len(report.contradiction_pairs)}")
+    print(f"  Merged duplicates: {len(report.merged_pairs)}")
+    print(f"  Superseded facts: {len(report.superseded)}")
+    print(f"  Contradictions resolved: {report.contradictions_resolved}")
     print()
 
     # Evaluate recall/precision

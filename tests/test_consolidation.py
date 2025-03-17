@@ -111,6 +111,22 @@ def test_resolve_contradiction_trusted_beats_untrusted() -> None:
     assert winner.node_id == older.node_id
 
 
+def test_consolidation_orders_conflicts_by_time_not_insertion_or_id() -> None:
+    graph = MemoryGraph()
+    old = _fact("home", "old address", ts=100)
+    new = _fact("home", "new address", ts=200)
+    graph.add_node(new)
+    graph.add_node(old)
+
+    report = consolidate_graph(graph)
+
+    assert graph.get_node(new.node_id) is not None
+    assert graph.get_node(new.node_id).is_active
+    assert graph.get_node(old.node_id) is not None
+    assert not graph.get_node(old.node_id).is_active
+    assert report.superseded == [old.node_id]
+
+
 def test_consolidate_graph_full_pass() -> None:
     g = MemoryGraph()
     # Two similar facts (dedup)
