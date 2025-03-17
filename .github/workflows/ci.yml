@@ -1,0 +1,26 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v5
+      - name: Install development and CPU model extras
+        run: |
+          uv venv .venv --python "${{ matrix.python-version }}"
+          uv pip install --python .venv/bin/python --index-strategy unsafe-best-match -e '.[dev,torch]' --extra-index-url https://download.pytorch.org/whl/cpu
+      - run: make build
+      - run: make test-all
+      - run: make format-check
+      - run: make lint

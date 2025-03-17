@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a focused improvement to the framework
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: This can be demonstrated offline with synthetic data.
+        - label: This does not require real personal data or external credentials.
