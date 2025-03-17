@@ -181,11 +181,11 @@ def consolidate_graph(
             continue
         # Keep the newer one as survivor
         survivor, obsolete = (a, b) if a.created_at_s >= b.created_at_s else (b, a)
-        if not graph.get_node(survivor.node_id) or not graph.get_node(obsolete.node_id):
+        survivor_node = graph.get_node(survivor.node_id)
+        obsolete_node = graph.get_node(obsolete.node_id)
+        if survivor_node is None or obsolete_node is None:
             continue
-        if not graph.get_node(survivor.node_id).is_active:
-            continue
-        if not graph.get_node(obsolete.node_id).is_active:
+        if not survivor_node.is_active or not obsolete_node.is_active:
             continue
         merge_duplicate(graph, survivor, obsolete)
         report.merged_pairs.append((survivor.node_id, obsolete.node_id))
@@ -197,8 +197,6 @@ def consolidate_graph(
     for a, b in contradictions:
         key = _fact_key(a)
         if key in resolved_keys:
-            continue
-        if not graph.get_node(a.node_id) or not graph.get_node(b.node_id):
             continue
         node_a = graph.get_node(a.node_id)
         node_b = graph.get_node(b.node_id)

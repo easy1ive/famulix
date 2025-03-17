@@ -275,7 +275,7 @@ def run_full_evaluation(
     # Preference calibration (build profile from signals and measure)
     profile = PreferenceProfile()
     for idx, sig in enumerate(truth["preference_signals"]):
-        rating: FeedbackRating = sig["rating"]  # type: ignore[assignment]
+        rating = sig["rating"]
         profile.add_feedback(
             pref_key=sig["key"],
             value=sig["value"],

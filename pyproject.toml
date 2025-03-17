@@ -72,3 +72,7 @@ warn_unused_ignores = true
 strict_equality = true
 plugins = []
 files = ["src/famulix"]
+
+[[tool.mypy.overrides]]
+module = ["famulix.salience_torch"]
+ignore_missing_imports = true

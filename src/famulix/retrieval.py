@@ -184,12 +184,12 @@ def hybrid_score(
         )
 
     # Verify citations resolve to existing nodes
-    results = []
+    results: list[RetrievalResult] = []
     for nid, score in sorted(fused.items(), key=lambda x: x[1], reverse=True):
-        node = graph.get_node(nid)
-        if node is None or not node.is_active:
+        result_node = graph.get_node(nid)
+        if result_node is None or not result_node.is_active:
             continue
-        citation = f"[{node.kind}] {node.title}"
+        citation = f"[{result_node.kind}] {result_node.title}"
         results.append(RetrievalResult(node_id=nid, score=score, citation=citation))
     return results
 

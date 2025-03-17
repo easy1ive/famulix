@@ -9,7 +9,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+
+from famulix.memory_graph import MemoryGraph
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -125,7 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
-    handlers: dict[str, object] = {
+    handlers: dict[str, Callable[[argparse.Namespace], int]] = {
         "demo": cmd_demo,
         "eval": cmd_eval,
         "recall": cmd_recall,
@@ -145,10 +147,10 @@ def _dispatch(args: argparse.Namespace) -> int:
     if handler is None:
         print(f"famulix {args.command}: not yet implemented", file=sys.stderr)
         return 1
-    return handler(args)  # type: ignore[operator]
+    return handler(args)
 
 
-def _build_demo_graph(persona: str, seed: int, days: int):
+def _build_demo_graph(persona: str, seed: int, days: int) -> tuple[MemoryGraph, int]:
     """Build a demo graph from synthetic history."""
     from famulix.consolidation import consolidate_graph
     from famulix.encoding import encode_events_to_graph
@@ -222,10 +224,10 @@ def cmd_recall(args: argparse.Namespace) -> int:
     results = hybrid_score(query, graph=graph, index=idx, now_s=now_s)
     print(f"Top {args.k} results for: {query}")
     for i, r in enumerate(results[: args.k]):
-        node = graph.get_node(r.node_id)
-        if node is None:
+        result_node = graph.get_node(r.node_id)
+        if result_node is None:
             continue
-        print(f"  {i + 1}. [{node.kind}] {node.title} (score={r.score:.4f})")
+        print(f"  {i + 1}. [{result_node.kind}] {result_node.title} (score={r.score:.4f})")
     return 0
 
 
@@ -255,7 +257,7 @@ def cmd_brief(args: argparse.Namespace) -> int:
     return 0
 
 
-def _default_date(graph, persona: str, seed: int, days: int) -> str:
+def _default_date(graph: MemoryGraph, persona: str, seed: int, days: int) -> str:
     """Compute the last day of the synthetic history."""
     from famulix.factory import generate_history
 
@@ -277,13 +279,13 @@ def cmd_context(args: argparse.Namespace) -> int:
     results = hybrid_score(query, graph=graph, index=idx, now_s=now_s)
     context_items: list[ContextItem] = []
     for r in results[:20]:
-        node = graph.get_node(r.node_id)
-        if node is None:
+        result_node = graph.get_node(r.node_id)
+        if result_node is None:
             continue
-        text = f"{node.title}: {node.body}"
+        text = f"{result_node.title}: {result_node.body}"
         context_items.append(
             ContextItem(
-                item_id=node.node_id,
+                item_id=result_node.node_id,
                 token_estimate=estimate_tokens(text),
                 value=r.score,
                 payload=text,
@@ -312,7 +314,7 @@ def cmd_prefs(args: argparse.Namespace) -> int:
         profile.add_feedback(
             pref_key=sig["key"],
             value=sig["value"],
-            signal=sig["rating"],  # type: ignore[arg-type]
+            signal=sig["rating"],
             timestamp_s=idx * 3600,
             confidence=0.6,
             source="synthetic",
@@ -372,7 +374,7 @@ def cmd_triggers(args: argparse.Namespace) -> int:
     triggers = generate_triggers(graph, now_s=now_s)
     print(f"Generated {len(triggers)} triggers:")
     for t in triggers[:20]:
-        print(f"  [{t.kind}] {t.title} (score={t.score:.3f})")
+        print(f"  [{t.trigger_time_s}] {t.reason} (memory={t.memory_id})")
     return 0
 
 
