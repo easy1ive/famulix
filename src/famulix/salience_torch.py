@@ -10,16 +10,14 @@ Marked tests skip cleanly when torch is not installed.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from importlib import import_module
+from typing import cast
 
 from famulix.memory_graph import MemoryGraph, MemoryNode
 
-if TYPE_CHECKING:
-    import torch  # type: ignore[import-not-found]  # noqa: F401
-
 try:
-    import torch
-    from torch import nn
+    torch = import_module("torch")
+    nn = torch.nn
 
     _TORCH_AVAILABLE = True
 except ImportError:  # pragma: no cover
@@ -105,7 +103,7 @@ class SalienceMLP:
         self.config = config or TorchSalienceConfig()
         torch.manual_seed(self.config.seed)
 
-        layers: list[nn.Module] = []
+        layers: list[object] = []
         prev_dim = self.config.input_dim
         for _ in range(self.config.num_layers - 1):
             layers.append(nn.Linear(prev_dim, self.config.hidden_dim))
