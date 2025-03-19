@@ -294,6 +294,15 @@ class PolicyEngine:
                 if a.effect == b.effect:
                     continue
                 # Check overlap
-                if a.actions & b.actions and a.resources & b.resources and a.tiers & b.tiers:
+                if (
+                    _sets_overlap(a.actions, b.actions)
+                    and _sets_overlap(a.resources, b.resources)
+                    and _sets_overlap(a.tiers, b.tiers)
+                ):
                     conflicts.append((a.id, b.id))
         return conflicts
+
+
+def _sets_overlap(left: set[str], right: set[str]) -> bool:
+    """Empty policy dimensions match every value, as in rule evaluation."""
+    return not left or not right or bool(left & right)
