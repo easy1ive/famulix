@@ -5,10 +5,12 @@ from __future__ import annotations
 from famulix.briefing import (
     BriefingItem,
     build_briefing,
+    build_briefing_from_connectors,
     gather_memories,
     render_briefing_html,
     render_briefing_markdown,
 )
+from famulix.connectors import ConnectorHub, ConnectorRecord, ScriptedConnector
 from famulix.memory_graph import MemoryGraph, MemoryNode
 
 
@@ -168,3 +170,28 @@ def test_all_cited_memory_ids_unique_set():
     assert isinstance(all_ids, set)
     # each item has one id, unique set should equal number of items
     assert len(all_ids) == len(briefing.items)
+
+
+def test_connector_pipeline_builds_deterministic_resolvable_briefing() -> None:
+    connector = ScriptedConnector(
+        "notes",
+        (
+            ConnectorRecord(
+                "notes", "n1", "note", 1_700_000_000, "plan", "Review the project plan"
+            ),
+            ConnectorRecord("notes", "n2", "note", 1_700_000_100, "meeting", "Team sync at 10"),
+        ),
+    )
+    hub = ConnectorHub([connector])
+    graph, first = build_briefing_from_connectors(
+        hub, date_str="2026-11-12", now_s=1_700_001_000, seed=9
+    )
+    second_graph, second = build_briefing_from_connectors(
+        hub, date_str="2026-11-12", now_s=1_700_001_000, seed=9
+    )
+
+    assert first.citations_resolve(graph)
+    assert first.all_cited_memory_ids() == second.all_cited_memory_ids()
+    assert [item.title for item in first.items] == [item.title for item in second.items]
+    assert all(graph.get_node(memory_id) for memory_id in second.all_cited_memory_ids())
+    assert graph.node_count() == second_graph.node_count()
