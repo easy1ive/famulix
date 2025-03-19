@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Literal
 
 RedactionMode = Literal["reversible", "irreversible"]
 TierAction = Literal["allow", "deny", "ask"]
 PolicyEffect = Literal["allow", "deny", "ask"]
+PrivacyTier = Literal["public", "shared", "personal", "private"]
+
+PRIVACY_TIER_LEVEL: dict[str, int] = {"public": 0, "shared": 1, "personal": 2, "private": 3}
 
 
 # --- PII Detection ---------------------------------------------------------
@@ -137,7 +142,12 @@ class TierRule:
 class AccessLog:
     """Immutable append-only access log."""
 
-    entries: list[dict[str, object]] = field(default_factory=list)
+    _entries: list[dict[str, object]] = field(default_factory=list, repr=False)
+
+    @property
+    def entries(self) -> tuple[Mapping[str, object], ...]:
+        """Return immutable snapshots so callers cannot rewrite the audit trail."""
+        return tuple(MappingProxyType(dict(entry)) for entry in self._entries)
 
     def record(
         self,
@@ -148,7 +158,7 @@ class AccessLog:
         result: str,
         timestamp_s: int,
     ) -> None:
-        self.entries.append(
+        self._entries.append(
             {
                 "actor": actor,
                 "action": action,
@@ -162,7 +172,63 @@ class AccessLog:
         return sum(1 for e in self.entries if e["result"] == result)
 
     def filter_by_actor(self, actor: str) -> list[dict[str, object]]:
-        return [e for e in self.entries if e["actor"] == actor]
+        return [dict(e) for e in self._entries if e["actor"] == actor]
+
+
+@dataclass(frozen=True)
+class AccessDecision:
+    """Audited result of a privacy-tier access request."""
+
+    allowed: bool
+    effect: PolicyEffect
+    reason: str
+
+
+class PrivacyGate:
+    """Combine policy evaluation with monotonic privacy-tier enforcement."""
+
+    def __init__(self, policy: PolicyEngine, audit: AccessLog | None = None) -> None:
+        self.policy = policy
+        self.audit = audit or AccessLog()
+
+    def request(
+        self,
+        *,
+        actor: str,
+        action: str,
+        resource: str,
+        data_tier: PrivacyTier,
+        clearance_tier: PrivacyTier,
+        timestamp_s: int,
+        destination_tier: PrivacyTier | None = None,
+        approval_granted: bool = False,
+    ) -> AccessDecision:
+        """Check policy and clearance; exporting may never lower a tier."""
+        if data_tier not in PRIVACY_TIER_LEVEL or clearance_tier not in PRIVACY_TIER_LEVEL:
+            raise ValueError("unknown privacy tier")
+        if destination_tier is not None and destination_tier not in PRIVACY_TIER_LEVEL:
+            raise ValueError("unknown destination privacy tier")
+        effect: PolicyEffect
+        if (
+            destination_tier is not None
+            and PRIVACY_TIER_LEVEL[destination_tier] < PRIVACY_TIER_LEVEL[data_tier]
+        ):
+            effect, reason = "deny", "export would lower the data privacy tier"
+        elif PRIVACY_TIER_LEVEL[clearance_tier] < PRIVACY_TIER_LEVEL[data_tier]:
+            effect, reason = "deny", "actor clearance is below the data privacy tier"
+        else:
+            effect, rule_id = self.policy.evaluate(action=action, resource=resource, tier=data_tier)
+            reason = f"matched policy {rule_id}" if rule_id else "no matching policy rule"
+        allowed = effect == "allow" or (effect == "ask" and approval_granted)
+        result = "allowed" if allowed else "approval_required" if effect == "ask" else "denied"
+        self.audit.record(
+            actor=actor,
+            action=action,
+            resource=resource,
+            result=result,
+            timestamp_s=timestamp_s,
+        )
+        return AccessDecision(allowed=allowed, effect=effect, reason=reason)
 
 
 # --- Policy Engine ---------------------------------------------------------

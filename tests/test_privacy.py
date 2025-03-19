@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from famulix.privacy import (
     AccessLog,
     PIIMatch,
     PolicyEngine,
     PolicyRule,
+    PrivacyGate,
     detect_pii,
     redact_text,
     restore_text,
@@ -82,6 +85,77 @@ def test_access_log_append_only() -> None:
     assert log.count_by_result("allowed") == 1
     assert log.count_by_result("denied") == 1
     assert len(log.filter_by_actor("user1")) == 1
+
+
+def test_access_log_exposes_read_only_snapshots() -> None:
+    log = AccessLog()
+    log.record(actor="u", action="read", resource="memory/1", result="allowed", timestamp_s=5)
+    with pytest.raises(TypeError):
+        log.entries[0]["result"] = "denied"  # type: ignore[index]
+    copied = log.filter_by_actor("u")
+    copied[0]["result"] = "denied"
+    assert log.entries[0]["result"] == "allowed"
+
+
+def test_privacy_gate_blocks_lower_tier_export_even_when_policy_allows() -> None:
+    policy = PolicyEngine(default_effect="allow")
+    audit = AccessLog()
+    gate = PrivacyGate(policy, audit)
+
+    decision = gate.request(
+        actor="local-user",
+        action="export",
+        resource="memory/secret",
+        data_tier="private",
+        clearance_tier="private",
+        destination_tier="public",
+        timestamp_s=10,
+    )
+
+    assert not decision.allowed
+    assert decision.effect == "deny"
+    assert "lower" in decision.reason
+    assert audit.entries[-1]["result"] == "denied"
+
+
+def test_privacy_gate_requires_clearance_and_records_approval_state() -> None:
+    policy = PolicyEngine(default_effect="ask")
+    audit = AccessLog()
+    gate = PrivacyGate(policy, audit)
+    denied = gate.request(
+        actor="guest",
+        action="read",
+        resource="memory/one",
+        data_tier="personal",
+        clearance_tier="shared",
+        timestamp_s=1,
+    )
+    asked = gate.request(
+        actor="owner",
+        action="read",
+        resource="memory/one",
+        data_tier="personal",
+        clearance_tier="private",
+        timestamp_s=2,
+    )
+    approved = gate.request(
+        actor="owner",
+        action="read",
+        resource="memory/one",
+        data_tier="personal",
+        clearance_tier="private",
+        timestamp_s=3,
+        approval_granted=True,
+    )
+
+    assert denied.effect == "deny" and not denied.allowed
+    assert asked.effect == "ask" and not asked.allowed
+    assert approved.effect == "ask" and approved.allowed
+    assert [row["result"] for row in audit.entries] == [
+        "denied",
+        "approval_required",
+        "allowed",
+    ]
 
 
 def test_policy_engine_default_deny() -> None:
