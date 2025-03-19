@@ -277,6 +277,32 @@ def test_policy_no_conflicts_different_priority() -> None:
     assert pe.check_conflicts() == []
 
 
+def test_policy_conflict_detection_treats_empty_scope_as_wildcard() -> None:
+    pe = PolicyEngine()
+    pe.add_rule(
+        PolicyRule(
+            id="global-allow",
+            effect="allow",
+            actions=set(),
+            resources=set(),
+            tiers=set(),
+            priority=4,
+        )
+    )
+    pe.add_rule(
+        PolicyRule(
+            id="private-deny",
+            effect="deny",
+            actions={"export"},
+            resources={"memory/private"},
+            tiers={"private"},
+            priority=4,
+        )
+    )
+
+    assert pe.check_conflicts() == [("global-allow", "private-deny")]
+
+
 def test_piimatch_dataclass() -> None:
     m = PIIMatch("email", 0, 5, "a@b.co")
     assert m.pii_type == "email"
