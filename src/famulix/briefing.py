@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from famulix.connectors import ConnectorHub
+from famulix.consolidation import consolidate_graph
 from famulix.context import ContextItem, assemble_context, estimate_tokens
+from famulix.encoding import encode_events_to_graph
 from famulix.memory_graph import MemoryGraph
 from famulix.reports import (
     ReportSection,
@@ -241,3 +244,27 @@ def render_briefing_html(
         metadata=briefing.metadata,
         svg_charts=svg_charts,
     )
+
+
+def build_briefing_from_connectors(
+    connectors: ConnectorHub,
+    *,
+    date_str: str,
+    now_s: int,
+    budget_tokens: int = 500,
+    seed: int = 0,
+) -> tuple[MemoryGraph, Briefing]:
+    """Run local connector records through ingestion and cited briefing."""
+    events = connectors.to_events()
+    graph = encode_events_to_graph(events)
+    consolidate_graph(graph)
+    briefing = build_briefing(
+        graph,
+        date_str=date_str,
+        now_s=now_s,
+        budget_tokens=budget_tokens,
+        seed=seed,
+    )
+    if not briefing.citations_resolve(graph):
+        raise RuntimeError("connector briefing contains an unresolved citation")
+    return graph, briefing
