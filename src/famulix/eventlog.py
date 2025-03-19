@@ -14,13 +14,16 @@ from pathlib import Path
 from famulix.envelope import Envelope
 from famulix.events import Event
 
+LATEST_SCHEMA_VERSION = 2
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS event_log (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id TEXT NOT NULL UNIQUE,
     envelope_json TEXT NOT NULL,
     checksum TEXT NOT NULL,
-    inserted_at_s INTEGER NOT NULL
+    inserted_at_s INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_event_log_id ON event_log(event_id);
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -46,7 +49,24 @@ class EventLog:
     def _init_schema(self) -> None:
         with self._txn() as cur:
             cur.executescript(SCHEMA_SQL)
-            cur.execute("INSERT OR IGNORE INTO schema_version(version) VALUES (1)")
+            version_row = cur.execute("SELECT MAX(version) FROM schema_version").fetchone()
+            version = int(version_row[0] or 1)
+            if version > LATEST_SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"event log schema {version} is newer than supported {LATEST_SCHEMA_VERSION}"
+                )
+            columns = {row[1] for row in cur.execute("PRAGMA table_info(event_log)")}
+            if "source" not in columns:
+                cur.execute("ALTER TABLE event_log ADD COLUMN source TEXT NOT NULL DEFAULT ''")
+                frames = cur.execute("SELECT seq, envelope_json FROM event_log").fetchall()
+                for seq, line in frames:
+                    event = Event.from_envelope(Envelope.from_jsonl_line(line))
+                    cur.execute(
+                        "UPDATE event_log SET source = ? WHERE seq = ?", (event.source, seq)
+                    )
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_event_log_source ON event_log(source)")
+            cur.execute("DELETE FROM schema_version")
+            cur.execute("INSERT INTO schema_version(version) VALUES (?)", (LATEST_SCHEMA_VERSION,))
 
     @contextmanager
     def _txn(self) -> Iterator[sqlite3.Cursor]:
@@ -67,9 +87,9 @@ class EventLog:
         line = env.to_jsonl_line()
         with self._txn() as cur:
             cur.execute(
-                "INSERT INTO event_log(event_id, envelope_json, checksum, inserted_at_s)"
-                " VALUES (?, ?, ?, ?)",
-                (event.event_id, line, env.checksum, inserted_at_s),
+                "INSERT INTO event_log(event_id, envelope_json, checksum, inserted_at_s, source)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (event.event_id, line, env.checksum, inserted_at_s, event.source),
             )
             return cur.lastrowid or 0
 
@@ -78,28 +98,37 @@ class EventLog:
         return int(cur.fetchone()[0])
 
     def get_by_seq(self, seq: int) -> Event | None:
-        cur = self._conn.execute("SELECT envelope_json FROM event_log WHERE seq = ?", (seq,))
+        cur = self._conn.execute(
+            "SELECT envelope_json, checksum FROM event_log WHERE seq = ?", (seq,)
+        )
         row = cur.fetchone()
         if row is None:
             return None
-        return Event.from_envelope(Envelope.from_jsonl_line(row[0]))
+        return self._decode_frame(row[0], row[1])
 
     def get_by_id(self, event_id: str) -> Event | None:
         cur = self._conn.execute(
-            "SELECT envelope_json FROM event_log WHERE event_id = ?", (event_id,)
+            "SELECT envelope_json, checksum FROM event_log WHERE event_id = ?", (event_id,)
         )
         row = cur.fetchone()
         if row is None:
             return None
-        return Event.from_envelope(Envelope.from_jsonl_line(row[0]))
+        return self._decode_frame(row[0], row[1])
 
     def iter_events(self, start_seq: int = 1) -> Iterator[Event]:
         cur = self._conn.execute(
-            "SELECT envelope_json FROM event_log WHERE seq >= ? ORDER BY seq",
+            "SELECT envelope_json, checksum FROM event_log WHERE seq >= ? ORDER BY seq",
             (start_seq,),
         )
         for row in cur:
-            yield Event.from_envelope(Envelope.from_jsonl_line(row[0]))
+            yield self._decode_frame(row[0], row[1])
+
+    @staticmethod
+    def _decode_frame(line: str, stored_checksum: str) -> Event:
+        env = Envelope.from_jsonl_line(line)
+        if env.checksum != stored_checksum:
+            raise ValueError("event log frame checksum does not match stored checksum")
+        return Event.from_envelope(env)
 
     def replay_into(self, other: EventLog) -> int:
         """Replay all events into another log. Returns count copied."""
