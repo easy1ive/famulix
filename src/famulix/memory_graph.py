@@ -149,6 +149,58 @@ class MemoryGraph:
     def all_edges(self) -> list[MemoryEdge]:
         return list(self._edges.values())
 
+    def to_dict(self) -> dict[str, object]:
+        """Return a versioned, deterministic representation of the graph."""
+        nodes = [
+            {
+                "node_id": node.node_id,
+                "kind": node.kind,
+                "title": node.title,
+                "body": node.body,
+                "metadata": dict(sorted(node.metadata.items())),
+                "created_at_s": node.created_at_s,
+                "is_active": node.is_active,
+                "version": node.version,
+            }
+            for node in sorted(self._nodes.values(), key=lambda item: item.node_id)
+        ]
+        edges = [
+            {
+                "edge_id": edge.edge_id,
+                "from_id": edge.from_id,
+                "to_id": edge.to_id,
+                "kind": edge.kind,
+                "weight": round(edge.weight, 6),
+            }
+            for edge in sorted(self._edges.values(), key=lambda item: item.edge_id)
+        ]
+        return {"schema_version": 1, "nodes": nodes, "edges": edges}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> MemoryGraph:
+        """Load a graph representation, rejecting unsupported or invalid data."""
+        if data.get("schema_version") != 1:
+            raise ValueError("unsupported memory graph schema version")
+        nodes = data.get("nodes")
+        edges = data.get("edges")
+        if not isinstance(nodes, list) or not isinstance(edges, list):
+            raise ValueError("memory graph nodes and edges must be lists")
+        graph = cls()
+        try:
+            for raw_node in nodes:
+                if not isinstance(raw_node, dict):
+                    raise ValueError("memory graph node must be an object")
+                graph.add_node(MemoryNode(**raw_node))
+            for raw_edge in edges:
+                if not isinstance(raw_edge, dict):
+                    raise ValueError("memory graph edge must be an object")
+                graph.add_edge(MemoryEdge(**raw_edge))
+        except (TypeError, KeyError) as exc:
+            raise ValueError("invalid memory graph record") from exc
+        if graph.has_cycle_along("derived_from"):
+            raise ValueError("memory graph provenance must be acyclic")
+        return graph
+
     def has_cycle_along(self, kind: EdgeKind) -> bool:
         """Return True if there is a cycle along edges of the given kind."""
         white, gray, black = 0, 1, 2
