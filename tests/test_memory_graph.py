@@ -114,3 +114,46 @@ def test_in_edges_and_out_edges() -> None:
     assert len(g.out_edges(a.node_id)) == 1
     assert len(g.in_edges(b.node_id)) == 1
     assert len(g.in_edges(a.node_id)) == 0
+
+
+def test_graph_schema_round_trip_is_deterministic() -> None:
+    graph = MemoryGraph()
+    fact = MemoryNode.create("fact", "meeting", "Tuesday", metadata={"source": "calendar"})
+    episode = MemoryNode.create("episode", "day", "A meeting was planned", created_at_s=42)
+    graph.add_node(fact)
+    graph.add_node(episode)
+    graph.add_edge(MemoryEdge.create(episode.node_id, fact.node_id, "derived_from", 0.875))
+
+    encoded = graph.to_dict()
+    decoded = MemoryGraph.from_dict(encoded)
+
+    assert encoded["schema_version"] == 1
+    assert decoded.to_dict() == encoded
+    assert list(encoded["nodes"]) == sorted(encoded["nodes"], key=lambda item: item["node_id"])
+
+
+def test_graph_loader_rejects_cycles_and_dangling_edges() -> None:
+    left = MemoryNode.create("fact", "left", "a")
+    right = MemoryNode.create("fact", "right", "b")
+    nodes = [
+        {
+            "node_id": node.node_id,
+            "kind": node.kind,
+            "title": node.title,
+            "body": node.body,
+            "metadata": {},
+            "created_at_s": 0,
+            "is_active": True,
+            "version": 1,
+        }
+        for node in (left, right)
+    ]
+    one = MemoryEdge.create(left.node_id, right.node_id, "derived_from")
+    two = MemoryEdge.create(right.node_id, left.node_id, "derived_from")
+    cyclic = {"schema_version": 1, "nodes": nodes, "edges": [one.__dict__, two.__dict__]}
+    with pytest.raises(ValueError, match="acyclic"):
+        MemoryGraph.from_dict(cyclic)
+
+    dangling = {"schema_version": 1, "nodes": nodes[:1], "edges": [one.__dict__]}
+    with pytest.raises(ValueError, match="dangling"):
+        MemoryGraph.from_dict(dangling)
