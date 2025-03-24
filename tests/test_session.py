@@ -5,6 +5,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from famulix.session import SessionRecorder, session_diff
 
 
@@ -68,6 +70,25 @@ def test_jsonl_bytes_ignore_mapping_insertion_order() -> None:
 
     assert first.to_jsonl().encode("utf-8") == second.to_jsonl().encode("utf-8")
     assert first.verify() and second.verify()
+
+
+def test_load_rejects_tampered_frame(tmp_path: Path) -> None:
+    recorder = SessionRecorder(session_id="stable", seed=8)
+    recorder.record("decision", {"choice": "brief"}, 100)
+    path = tmp_path / "session.jsonl"
+    path.write_text(recorder.to_jsonl().replace('"choice": "brief"', '"choice": "other"'))
+
+    with pytest.raises(ValueError, match="checksum"):
+        SessionRecorder.load(path)
+
+
+@pytest.mark.parametrize("content", ["{broken}\n", "[]\n", "\n"])
+def test_load_rejects_malformed_frames(tmp_path: Path, content: str) -> None:
+    path = tmp_path / "session.jsonl"
+    path.write_text(content)
+
+    with pytest.raises(ValueError):
+        SessionRecorder.load(path)
 
 
 def test_digest_different_for_different_content() -> None:
