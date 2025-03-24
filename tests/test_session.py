@@ -60,6 +60,16 @@ def test_digest_deterministic() -> None:
     assert a.digest() == b.digest()
 
 
+def test_jsonl_bytes_ignore_mapping_insertion_order() -> None:
+    first = SessionRecorder(session_id="stable", seed=8)
+    second = SessionRecorder(session_id="stable", seed=8)
+    first.record("decision", {"alpha": 1, "nested": {"left": 2, "right": 3}}, 100)
+    second.record("decision", {"nested": {"right": 3, "left": 2}, "alpha": 1}, 100)
+
+    assert first.to_jsonl().encode("utf-8") == second.to_jsonl().encode("utf-8")
+    assert first.verify() and second.verify()
+
+
 def test_digest_different_for_different_content() -> None:
     a = SessionRecorder(session_id="s1", seed=42)
     a.record("event", {"x": 1}, 100)
