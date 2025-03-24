@@ -63,17 +63,34 @@ class SessionRecorder:
 
     @classmethod
     def load(cls, path: str | Path) -> SessionRecorder:
-        lines = Path(path).read_text().strip().split("\n")
+        text = Path(path).read_text(encoding="utf-8")
         rec = cls(session_id="")
-        for line in lines:
+        for line_number, line in enumerate(text.splitlines(), start=1):
             if not line:
-                continue
-            entry = json.loads(line)
+                raise ValueError(f"empty session frame at line {line_number}")
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"invalid session JSON at line {line_number}") from exc
+            if not isinstance(entry, dict):
+                raise ValueError(f"session frame at line {line_number} must be an object")
+            required = {"session_id", "seq", "kind", "timestamp_s", "payload", "seed", "_hash"}
+            if not required.issubset(entry):
+                missing = ", ".join(sorted(required - entry.keys()))
+                raise ValueError(f"session frame at line {line_number} is missing: {missing}")
+            if entry["seq"] != len(rec.entries):
+                raise ValueError(f"session sequence mismatch at line {line_number}")
             rec.entries.append(entry)
-            rec._frame_hashes.append(entry.get("_hash", ""))
+            rec._frame_hashes.append(entry["_hash"])
         if rec.entries:
             rec.session_id = rec.entries[0]["session_id"]
             rec.seed = rec.entries[0].get("seed", 0)
+            if any(entry["session_id"] != rec.session_id for entry in rec.entries):
+                raise ValueError("session frames contain multiple session ids")
+            if any(entry["seed"] != rec.seed for entry in rec.entries):
+                raise ValueError("session frames contain multiple seeds")
+            if not rec.verify():
+                raise ValueError("session frame checksum verification failed")
         return rec
 
     def digest(self) -> str:
