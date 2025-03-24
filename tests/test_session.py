@@ -99,6 +99,17 @@ def test_digest_different_for_different_content() -> None:
     assert a.digest() != b.digest()
 
 
+def test_verify_returns_false_for_in_memory_sequence_or_identity_drift() -> None:
+    rec = SessionRecorder(session_id="s1", seed=42)
+    rec.record("event", {"x": 1}, 100)
+    rec.entries[0]["seq"] = 3
+    assert not rec.verify()
+
+    rec.entries[0]["seq"] = 0
+    rec.entries[0]["session_id"] = "other"
+    assert not rec.verify()
+
+
 def test_session_diff_identical() -> None:
     a = SessionRecorder(session_id="s1", seed=42)
     a.record("event", {"x": 1}, 100)
