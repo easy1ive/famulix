@@ -56,7 +56,7 @@ class SessionRecorder:
         return True
 
     def to_jsonl(self) -> str:
-        return "\n".join(json.dumps(e, ensure_ascii=False) for e in self.entries)
+        return "\n".join(json.dumps(e, ensure_ascii=False, sort_keys=True) for e in self.entries)
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(self.to_jsonl() + "\n")
