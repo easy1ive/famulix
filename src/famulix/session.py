@@ -46,7 +46,13 @@ class SessionRecorder:
     def verify(self) -> bool:
         """Verify the entire chain of frame hashes is consistent."""
         hashes: list[str] = []
-        for entry in self.entries:
+        for index, entry in enumerate(self.entries):
+            if not isinstance(entry, dict) or entry.get("seq") != index:
+                return False
+            if entry.get("session_id") != self.session_id or entry.get("seed") != self.seed:
+                return False
+            if not isinstance(entry.get("_hash"), str):
+                return False
             frame_copy = {k: v for k, v in entry.items() if k != "_hash"}
             frame_json = json.dumps(frame_copy, sort_keys=True, ensure_ascii=False)
             expected = hashlib.sha256((frame_json + "".join(hashes)).encode()).hexdigest()[:16]
