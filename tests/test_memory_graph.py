@@ -72,15 +72,16 @@ def test_no_cycle_in_dag() -> None:
     assert not g.has_cycle_along("derived_from")
 
 
-def test_cycle_detected() -> None:
+def test_provenance_cycle_is_rejected_at_insertion() -> None:
     g = MemoryGraph()
     a = MemoryNode.create("fact", "a", "a")
     b = MemoryNode.create("fact", "b", "b")
     g.add_node(a)
     g.add_node(b)
     g.add_edge(MemoryEdge.create(a.node_id, b.node_id, "derived_from"))
-    g.add_edge(MemoryEdge.create(b.node_id, a.node_id, "derived_from"))
-    assert g.has_cycle_along("derived_from")
+    with pytest.raises(ValueError, match="acyclic"):
+        g.add_edge(MemoryEdge.create(b.node_id, a.node_id, "derived_from"))
+    assert not g.has_cycle_along("derived_from")
 
 
 def test_cycle_check_only_considers_requested_kind() -> None:

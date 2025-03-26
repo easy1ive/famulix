@@ -118,9 +118,26 @@ class MemoryGraph:
             raise ValueError(f"dangling edge from {edge.from_id}")
         if edge.to_id not in self._nodes:
             raise ValueError(f"dangling edge to {edge.to_id}")
+        if edge.kind == "derived_from" and self._has_provenance_path(edge.to_id, edge.from_id):
+            raise ValueError("derived_from edges must keep provenance acyclic")
         self._edges[edge.edge_id] = edge
         self._out_edges[edge.from_id].append(edge.edge_id)
         self._in_edges[edge.to_id].append(edge.edge_id)
+
+    def _has_provenance_path(self, start: MemoryId, target: MemoryId) -> bool:
+        pending = [start]
+        visited: set[MemoryId] = set()
+        while pending:
+            current = pending.pop()
+            if current == target:
+                return True
+            if current in visited:
+                continue
+            visited.add(current)
+            pending.extend(
+                edge.to_id for edge in self.out_edges(current) if edge.kind == "derived_from"
+            )
+        return False
 
     def get_node(self, node_id: MemoryId) -> MemoryNode | None:
         return self._nodes.get(node_id)
