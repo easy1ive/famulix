@@ -8,6 +8,7 @@ distributions in the synthetic evaluation harness.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -40,6 +41,12 @@ class PreferenceProfile:
     entries: list[PreferenceEntry] = field(default_factory=list)
     decay_half_life_s: float = 86400 * 30  # 30-day half-life
 
+    def __post_init__(self) -> None:
+        if self.version < 1:
+            raise ValueError("preference profile version must be positive")
+        if not math.isfinite(self.decay_half_life_s) or self.decay_half_life_s <= 0:
+            raise ValueError("preference decay half-life must be finite and positive")
+
     def add_feedback(
         self,
         pref_key: str,
@@ -49,6 +56,12 @@ class PreferenceProfile:
         confidence: float = 0.5,
         source: str = "unknown",
     ) -> None:
+        if not pref_key.strip() or not value.strip() or not source.strip():
+            raise ValueError("preference key, value, and source must be non-empty")
+        if type(timestamp_s) is not int or timestamp_s < 0:
+            raise ValueError("preference timestamp must be a non-negative integer")
+        if not math.isfinite(confidence) or not 0 <= confidence <= 1:
+            raise ValueError("preference confidence must be finite and within [0, 1]")
         self.entries.append(
             PreferenceEntry(
                 pref_key=pref_key,
@@ -72,6 +85,8 @@ class PreferenceProfile:
         Returns {key: (value, confidence)} where confidence is in [0, 1].
         Only keys with confidence >= min_confidence are returned.
         """
+        if not math.isfinite(min_confidence) or not 0 <= min_confidence <= 1:
+            raise ValueError("minimum confidence must be finite and within [0, 1]")
         weights: dict[str, dict[str, float]] = {}
         for entry in self.entries:
             age = max(now_s - entry.timestamp_s, 0)

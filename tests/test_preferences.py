@@ -131,3 +131,28 @@ def test_preference_keys() -> None:
     p.add_feedback("tone", "concise", "up", 100)
     p.add_feedback("format", "markdown", "up", 200)
     assert p.preference_keys() == {"tone", "format"}
+
+
+@pytest.mark.parametrize("half_life", [0, -1, float("inf"), float("nan")])
+def test_profile_rejects_invalid_decay_half_life(half_life: float) -> None:
+    with pytest.raises(ValueError, match="half-life"):
+        PreferenceProfile(decay_half_life_s=half_life)
+
+
+@pytest.mark.parametrize("confidence", [-0.01, 1.01, float("inf"), float("nan")])
+def test_feedback_rejects_invalid_confidence(confidence: float) -> None:
+    with pytest.raises(ValueError, match="confidence"):
+        PreferenceProfile().add_feedback("tone", "concise", "up", 10, confidence)
+
+
+def test_feedback_rejects_empty_dimensions_and_negative_time() -> None:
+    profile = PreferenceProfile()
+    with pytest.raises(ValueError, match="non-empty"):
+        profile.add_feedback(" ", "concise", "up", 10)
+    with pytest.raises(ValueError, match="timestamp"):
+        profile.add_feedback("tone", "concise", "up", -1)
+
+
+def test_current_preferences_rejects_invalid_threshold() -> None:
+    with pytest.raises(ValueError, match="minimum confidence"):
+        PreferenceProfile().current_preferences(now_s=0, min_confidence=1.1)
