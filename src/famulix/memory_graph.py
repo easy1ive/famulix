@@ -86,7 +86,13 @@ class MemoryEdge:
             {"from": from_id, "to": to_id, "kind": kind, "weight": round(weight, 6)}
         )
         eid = content_id("edg", payload)
-        return cls(edge_id=eid, from_id=from_id, to_id=to_id, kind=kind, weight=weight)
+        return cls(
+            edge_id=eid,
+            from_id=from_id,
+            to_id=to_id,
+            kind=kind,
+            weight=round(weight, 6),
+        )
 
 
 class MemoryGraph:
@@ -170,7 +176,7 @@ class MemoryGraph:
                 "from_id": edge.from_id,
                 "to_id": edge.to_id,
                 "kind": edge.kind,
-                "weight": round(edge.weight, 6),
+                "weight": edge.weight,
             }
             for edge in sorted(self._edges.values(), key=lambda item: item.edge_id)
         ]
