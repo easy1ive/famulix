@@ -104,6 +104,19 @@ def test_edge_id_deterministic() -> None:
     assert e1.edge_id.startswith("edg_")
 
 
+def test_edge_weight_is_quantized_at_creation_and_round_trips() -> None:
+    edge = MemoryEdge.create("source", "target", "mentions", 0.123456789)
+    assert edge.weight == 0.123457
+
+    graph = MemoryGraph()
+    graph.add_node(MemoryNode.create("fact", "source", "body"))
+    graph.add_node(MemoryNode.create("fact", "target", "body"))
+    source, target = graph.all_nodes()
+    graph.add_edge(MemoryEdge.create(source.node_id, target.node_id, "mentions", 0.123456789))
+    restored = MemoryGraph.from_dict(graph.to_dict())
+    assert restored.all_edges()[0].weight == graph.all_edges()[0].weight
+
+
 def test_in_edges_and_out_edges() -> None:
     g = MemoryGraph()
     a = MemoryNode.create("fact", "a", "a")
