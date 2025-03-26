@@ -54,7 +54,10 @@ class SessionRecorder:
             if not isinstance(entry.get("_hash"), str):
                 return False
             frame_copy = {k: v for k, v in entry.items() if k != "_hash"}
-            frame_json = json.dumps(frame_copy, sort_keys=True, ensure_ascii=False)
+            try:
+                frame_json = json.dumps(frame_copy, sort_keys=True, ensure_ascii=False)
+            except (TypeError, ValueError):
+                return False
             expected = hashlib.sha256((frame_json + "".join(hashes)).encode()).hexdigest()[:16]
             if expected != entry["_hash"]:
                 return False

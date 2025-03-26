@@ -110,6 +110,14 @@ def test_verify_returns_false_for_in_memory_sequence_or_identity_drift() -> None
     assert not rec.verify()
 
 
+def test_verify_fails_closed_for_non_json_payload_mutation() -> None:
+    rec = SessionRecorder(session_id="s1", seed=42)
+    rec.record("event", {"x": 1}, 100)
+    rec.entries[0]["payload"] = {"unsupported": {1, 2}}
+
+    assert not rec.verify()
+
+
 def test_session_diff_identical() -> None:
     a = SessionRecorder(session_id="s1", seed=42)
     a.record("event", {"x": 1}, 100)
