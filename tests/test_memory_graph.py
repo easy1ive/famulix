@@ -170,3 +170,23 @@ def test_graph_loader_rejects_cycles_and_dangling_edges() -> None:
     dangling = {"schema_version": 1, "nodes": nodes[:1], "edges": [one.__dict__]}
     with pytest.raises(ValueError, match="dangling"):
         MemoryGraph.from_dict(dangling)
+
+
+def test_graph_loader_rejects_duplicate_ids_and_malformed_metadata() -> None:
+    node = MemoryNode.create("fact", "one", "body")
+    raw = {
+        "node_id": node.node_id,
+        "kind": node.kind,
+        "title": node.title,
+        "body": node.body,
+        "metadata": {},
+        "created_at_s": 0,
+        "is_active": True,
+        "version": 1,
+    }
+    with pytest.raises(ValueError, match="duplicate"):
+        MemoryGraph.from_dict({"schema_version": 1, "nodes": [raw, raw], "edges": []})
+
+    malformed = {**raw, "metadata": {"source": 3}}
+    with pytest.raises(ValueError, match="metadata"):
+        MemoryGraph.from_dict({"schema_version": 1, "nodes": [malformed], "edges": []})
