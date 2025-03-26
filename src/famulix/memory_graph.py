@@ -196,10 +196,41 @@ class MemoryGraph:
             for raw_node in nodes:
                 if not isinstance(raw_node, dict):
                     raise ValueError("memory graph node must be an object")
+                if set(raw_node) != {
+                    "node_id",
+                    "kind",
+                    "title",
+                    "body",
+                    "metadata",
+                    "created_at_s",
+                    "is_active",
+                    "version",
+                }:
+                    raise ValueError("memory graph node has unknown or missing fields")
+                if raw_node["node_id"] in graph._nodes:  # noqa: SLF001
+                    raise ValueError("duplicate memory graph node id")
+                if not isinstance(raw_node["metadata"], dict) or any(
+                    not isinstance(key, str) or not isinstance(value, str)
+                    for key, value in raw_node["metadata"].items()
+                ):
+                    raise ValueError("memory graph node metadata must contain strings")
+                if (
+                    type(raw_node["created_at_s"]) is not int
+                    or type(raw_node["version"]) is not int
+                ):
+                    raise ValueError("memory graph node timestamps and versions must be integers")
+                if type(raw_node["is_active"]) is not bool:
+                    raise ValueError("memory graph node active state must be boolean")
                 graph.add_node(MemoryNode(**raw_node))
             for raw_edge in edges:
                 if not isinstance(raw_edge, dict):
                     raise ValueError("memory graph edge must be an object")
+                if set(raw_edge) != {"edge_id", "from_id", "to_id", "kind", "weight"}:
+                    raise ValueError("memory graph edge has unknown or missing fields")
+                if raw_edge["edge_id"] in graph._edges:  # noqa: SLF001
+                    raise ValueError("duplicate memory graph edge id")
+                if type(raw_edge["weight"]) not in (int, float):
+                    raise ValueError("memory graph edge weight must be numeric")
                 graph.add_edge(MemoryEdge(**raw_edge))
         except (TypeError, KeyError) as exc:
             raise ValueError("invalid memory graph record") from exc
