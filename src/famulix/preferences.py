@@ -130,6 +130,7 @@ def brier_score(
         raise ValueError("predictions and outcomes must have same length")
     if not predictions:
         return 0.0
+    _validate_calibration_data(predictions, outcomes)
     p = np.array(predictions, dtype=np.float64)
     o = np.array(outcomes, dtype=np.float64)
     return round(float(np.mean((p - o) ** 2)), 6)
@@ -148,6 +149,9 @@ def reliability_bins(
     """
     if len(predictions) != len(outcomes):
         raise ValueError("predictions and outcomes must have same length")
+    if n_bins < 1:
+        raise ValueError("number of reliability bins must be positive")
+    _validate_calibration_data(predictions, outcomes)
     p = np.array(predictions, dtype=np.float64)
     o = np.array(outcomes, dtype=np.float64)
     bins: list[dict[str, float]] = []
@@ -171,6 +175,13 @@ def reliability_bins(
                 }
             )
     return bins
+
+
+def _validate_calibration_data(predictions: list[float], outcomes: list[int]) -> None:
+    if any(not math.isfinite(value) or not 0 <= value <= 1 for value in predictions):
+        raise ValueError("calibration predictions must be finite and within [0, 1]")
+    if any(type(value) is not int or value not in (0, 1) for value in outcomes):
+        raise ValueError("calibration outcomes must be integers 0 or 1")
 
 
 def calibration_error(
