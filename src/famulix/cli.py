@@ -14,6 +14,17 @@ from collections.abc import Callable, Sequence
 from famulix.memory_graph import MemoryGraph
 
 
+def _positive_int(value: str) -> int:
+    """Parse a positive CLI count or budget with a concise argparse error."""
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an integer greater than zero") from exc
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="famulix",
@@ -26,15 +37,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_demo = sub.add_parser("demo", help="run a full seeded persona day offline")
     p_demo.add_argument("--persona", default="alex", help="persona id (default: alex)")
     p_demo.add_argument("--seed", type=int, default=42, help="random seed (default: 42)")
-    p_demo.add_argument("--days", type=int, default=14, help="days of history (default: 14)")
+    p_demo.add_argument(
+        "--days", type=_positive_int, default=14, help="days of history (default: 14)"
+    )
     p_demo.add_argument("--json", action="store_true", help="output as JSON")
 
     # eval
     p_eval = sub.add_parser("eval", help="run evaluation on a synthetic persona")
     p_eval.add_argument("--persona", default="alex", help="persona id")
     p_eval.add_argument("--seed", type=int, default=0, help="random seed")
-    p_eval.add_argument("--days", type=int, default=90, help="days of history")
-    p_eval.add_argument("--budget", type=int, default=500, help="token budget")
+    p_eval.add_argument("--days", type=_positive_int, default=90, help="days of history")
+    p_eval.add_argument("--budget", type=_positive_int, default=500, help="token budget")
     p_eval.add_argument("--json", action="store_true", help="output as JSON")
 
     # recall
@@ -42,16 +55,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_recall.add_argument("query", nargs="?", default="", help="search query")
     p_recall.add_argument("--persona", default="alex", help="persona id for demo graph")
     p_recall.add_argument("--seed", type=int, default=0, help="seed for demo graph")
-    p_recall.add_argument("--days", type=int, default=30, help="days for demo graph")
-    p_recall.add_argument("-k", type=int, default=10, help="top-k results")
+    p_recall.add_argument("--days", type=_positive_int, default=30, help="days for demo graph")
+    p_recall.add_argument("-k", type=_positive_int, default=10, help="top-k results")
 
     # brief
     p_brief = sub.add_parser("brief", help="generate a daily briefing")
     p_brief.add_argument("--persona", default="alex", help="persona id")
     p_brief.add_argument("--seed", type=int, default=0, help="random seed")
-    p_brief.add_argument("--days", type=int, default=30, help="days of history")
+    p_brief.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_brief.add_argument("--date", help="date string (default: last day)")
-    p_brief.add_argument("--budget", type=int, default=500, help="token budget")
+    p_brief.add_argument("--budget", type=_positive_int, default=500, help="token budget")
     p_brief.add_argument("--output", help="output file (default: stdout)")
     p_brief.add_argument(
         "--format", choices=["markdown", "html"], default="markdown", help="output format"
@@ -62,14 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_ctx.add_argument("query", nargs="?", default="", help="context query")
     p_ctx.add_argument("--persona", default="alex", help="persona id")
     p_ctx.add_argument("--seed", type=int, default=0, help="seed")
-    p_ctx.add_argument("--days", type=int, default=30, help="days of history")
-    p_ctx.add_argument("--budget", type=int, default=300, help="token budget")
+    p_ctx.add_argument("--days", type=_positive_int, default=30, help="days of history")
+    p_ctx.add_argument("--budget", type=_positive_int, default=300, help="token budget")
 
     # prefs
     p_prefs = sub.add_parser("prefs", help="view learned preferences")
     p_prefs.add_argument("--persona", default="alex", help="persona id")
     p_prefs.add_argument("--seed", type=int, default=0, help="seed")
-    p_prefs.add_argument("--days", type=int, default=30, help="days of history")
+    p_prefs.add_argument("--days", type=_positive_int, default=30, help="days of history")
 
     # remember
     p_rem = sub.add_parser("remember", help="add a fact to memory")
@@ -93,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_trig = sub.add_parser("triggers", help="list proactive triggers")
     p_trig.add_argument("--persona", default="alex", help="persona id")
     p_trig.add_argument("--seed", type=int, default=0, help="seed")
-    p_trig.add_argument("--days", type=int, default=30, help="days of history")
+    p_trig.add_argument("--days", type=_positive_int, default=30, help="days of history")
 
     # privacy
     p_priv = sub.add_parser("privacy", help="privacy and redaction tools")

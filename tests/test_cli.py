@@ -69,6 +69,23 @@ def test_subcommand_help_does_not_crash():
     assert excinfo.value.code == 0
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["demo", "--days", "0"],
+        ["eval", "--budget", "-1"],
+        ["recall", "-k", "nope"],
+        ["context", "--days", "-4"],
+    ],
+)
+def test_positive_cli_limits_fail_with_argument_error(argv: list[str], capsys) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        main(argv)
+
+    assert excinfo.value.code == 2
+    assert "greater than zero" in capsys.readouterr().err
+
+
 def test_demo_json_flag():
     import json
     import sys
