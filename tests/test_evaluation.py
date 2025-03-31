@@ -43,6 +43,12 @@ def test_compute_recall_precision_no_retrieved():
     assert precision == 0.0
 
 
+def test_compute_recall_precision_zero_and_negative_k() -> None:
+    assert compute_recall_precision(["a"], {"a"}, k=0) == (0.0, 0.0)
+    with pytest.raises(ValueError, match="non-negative"):
+        compute_recall_precision(["a"], {"a"}, k=-1)
+
+
 def test_compute_recall_precision_k_limits():
     retrieved = ["a", "b", "c", "d", "e", "f"]
     relevant = {"a", "c", "e"}
