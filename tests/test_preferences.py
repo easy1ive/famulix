@@ -156,3 +156,20 @@ def test_feedback_rejects_empty_dimensions_and_negative_time() -> None:
 def test_current_preferences_rejects_invalid_threshold() -> None:
     with pytest.raises(ValueError, match="minimum confidence"):
         PreferenceProfile().current_preferences(now_s=0, min_confidence=1.1)
+
+
+@pytest.mark.parametrize("prediction", [-0.1, 1.1, float("inf"), float("nan")])
+def test_calibration_rejects_invalid_probabilities(prediction: float) -> None:
+    with pytest.raises(ValueError, match="predictions"):
+        brier_score([prediction], [1])
+
+
+@pytest.mark.parametrize("outcome", [-1, 2, True])
+def test_calibration_rejects_invalid_outcomes(outcome: int) -> None:
+    with pytest.raises(ValueError, match="outcomes"):
+        reliability_bins([0.5], [outcome])
+
+
+def test_reliability_bins_rejects_nonpositive_bin_count() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        reliability_bins([0.5], [1], n_bins=0)
