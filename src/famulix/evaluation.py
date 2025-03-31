@@ -95,8 +95,12 @@ def compute_recall_precision(
     recall = (relevant retrieved) / total_relevant
     precision = (relevant retrieved) / k
     """
+    if k < 0:
+        raise ValueError("k must be non-negative")
     if not relevant_ids:
         return 1.0, 1.0
+    if k == 0:
+        return 0.0, 0.0
     top_k = retrieved_ids[:k]
     relevant_retrieved = sum(1 for rid in top_k if rid in relevant_ids)
     recall = relevant_retrieved / len(relevant_ids)
