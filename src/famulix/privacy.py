@@ -102,6 +102,8 @@ def redact_text(
     In reversible mode, replaces with a hash-based token; returns a mapping
     from token to original value so the text can be restored.
     """
+    if mode not in ("irreversible", "reversible"):
+        raise ValueError(f"unsupported redaction mode: {mode}")
     matches = detect_pii(text)
     if not matches:
         return text, {}

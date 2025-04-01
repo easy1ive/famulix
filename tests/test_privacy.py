@@ -76,6 +76,11 @@ def test_irreversible_redaction() -> None:
     assert mapping == {}
 
 
+def test_redaction_rejects_unknown_mode() -> None:
+    with pytest.raises(ValueError, match="unsupported redaction mode"):
+        redact_text("alice@example.com", mode="unknown")  # type: ignore[arg-type]
+
+
 def test_reversible_redaction_round_trip() -> None:
     text = "Call alice@example.com or 555-123-4567."
     redacted, mapping = redact_text(text, mode="reversible", salt="test")
