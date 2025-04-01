@@ -28,6 +28,12 @@ PRIVACY_TIER_LEVEL: dict[str, int] = {"public": 0, "shared": 1, "personal": 2, "
 EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
 PHONE_PATTERN = re.compile(r"(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
 CARD_PATTERN = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
+ADDRESS_PATTERN = re.compile(
+    r"\b\d{1,6}\s+(?:[A-Za-z0-9.'-]+\s+){0,5}"
+    r"(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct)"
+    r"\b(?:,?\s*(?:apt|suite|unit)\s*[A-Za-z0-9-]+)?",
+    re.IGNORECASE,
+)
 
 
 def _luhn_check(number: str) -> bool:
@@ -68,6 +74,9 @@ def detect_pii(text: str) -> list[PIIMatch]:
 
     for m in PHONE_PATTERN.finditer(text):
         matches.append(PIIMatch("phone", m.start(), m.end(), m.group()))
+
+    for m in ADDRESS_PATTERN.finditer(text):
+        matches.append(PIIMatch("address", m.start(), m.end(), m.group()))
 
     for m in CARD_PATTERN.finditer(text):
         digits = re.sub(r"[ -]", "", m.group())

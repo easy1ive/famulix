@@ -28,6 +28,23 @@ def test_detect_phone() -> None:
     assert any(m.pii_type == "phone" for m in matches)
 
 
+def test_detect_street_address_and_redact_both_directions() -> None:
+    text = "Send the letter to 123 Main Street, Apt 4B tomorrow."
+    matches = detect_pii(text)
+    address = next(match for match in matches if match.pii_type == "address")
+    assert address.text == "123 Main Street, Apt 4B"
+
+    redacted, mapping = redact_text(text, mode="reversible", salt="fixture")
+    assert address.text not in redacted
+    assert restore_text(redacted, mapping) == text
+
+
+def test_address_detector_ignores_unqualified_street_names() -> None:
+    assert not any(
+        match.pii_type == "address" for match in detect_pii("Meet me on Main Street after work.")
+    )
+
+
 def test_detect_card_valid_luhn() -> None:
     # Standard Visa test number (Luhn-valid)
     matches = detect_pii("Card: 4111 1111 1111 1111")
