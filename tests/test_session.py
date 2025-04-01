@@ -19,6 +19,24 @@ def test_record_adds_entries() -> None:
     assert rec.entries[0]["_hash"] == h
 
 
+def test_record_snapshots_payload_and_rejects_non_json_values() -> None:
+    rec = SessionRecorder(session_id="s1", seed=4)
+    payload = {"nested": {"choice": "brief"}}
+    rec.record("decision", payload, 10)
+    payload["nested"]["choice"] = "changed"
+
+    assert rec.entries[0]["payload"]["nested"]["choice"] == "brief"
+    assert rec.verify()
+    with pytest.raises(ValueError, match="finite JSON"):
+        rec.record("decision", {"score": float("nan")}, 11)
+
+
+@pytest.mark.parametrize("timestamp", [-1, 1.5, True])
+def test_record_rejects_invalid_timestamp(timestamp: int) -> None:
+    with pytest.raises(ValueError, match="timestamp"):
+        SessionRecorder(session_id="s1").record("event", {}, timestamp)
+
+
 def test_verify_passes_for_valid_chain() -> None:
     rec = SessionRecorder(session_id="s1", seed=42)
     rec.record("event", {"a": 1}, 100)
