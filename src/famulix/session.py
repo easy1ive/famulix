@@ -26,15 +26,25 @@ class SessionRecorder:
 
     def record(self, kind: str, payload: dict[str, Any], timestamp_s: int) -> str:
         """Record an event. Returns the frame hash."""
+        if not kind.strip():
+            raise ValueError("session event kind must be non-empty")
+        if type(timestamp_s) is not int or timestamp_s < 0:
+            raise ValueError("session timestamp must be a non-negative integer")
+        if not isinstance(payload, dict):
+            raise ValueError("session payload must be an object")
+        try:
+            payload_snapshot = json.loads(json.dumps(payload, allow_nan=False))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("session payload must contain finite JSON values") from exc
         frame = {
             "session_id": self.session_id,
             "seq": len(self.entries),
             "kind": kind,
             "timestamp_s": timestamp_s,
-            "payload": payload,
+            "payload": payload_snapshot,
             "seed": self.seed,
         }
-        frame_json = json.dumps(frame, sort_keys=True, ensure_ascii=False)
+        frame_json = json.dumps(frame, sort_keys=True, ensure_ascii=False, allow_nan=False)
         frame_hash = hashlib.sha256(
             (frame_json + "".join(self._frame_hashes)).encode()
         ).hexdigest()[:16]
@@ -55,7 +65,9 @@ class SessionRecorder:
                 return False
             frame_copy = {k: v for k, v in entry.items() if k != "_hash"}
             try:
-                frame_json = json.dumps(frame_copy, sort_keys=True, ensure_ascii=False)
+                frame_json = json.dumps(
+                    frame_copy, sort_keys=True, ensure_ascii=False, allow_nan=False
+                )
             except (TypeError, ValueError):
                 return False
             expected = hashlib.sha256((frame_json + "".join(hashes)).encode()).hexdigest()[:16]
@@ -65,7 +77,9 @@ class SessionRecorder:
         return True
 
     def to_jsonl(self) -> str:
-        return "\n".join(json.dumps(e, ensure_ascii=False, sort_keys=True) for e in self.entries)
+        return "\n".join(
+            json.dumps(e, ensure_ascii=False, sort_keys=True, allow_nan=False) for e in self.entries
+        )
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(self.to_jsonl() + "\n")
