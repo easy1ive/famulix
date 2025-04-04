@@ -13,3 +13,8 @@ The supported public surface is currently organized by focused modules:
 - `famulix.session`, `briefing`, and `evaluation`: replay, cited reports, and synthetic scorecards.
 
 Public dataclasses and functions are type annotated. Serialized events use explicit schema versions and checksums; use their module codecs rather than relying on Python object representations.
+
+The encoding module exposes `extract_fact_candidates` for text/confidence
+pairs and `extract_fact_candidate_spans` for the same candidates with source
+character offsets. `decode_fact_candidate(event, node)` reconstructs a span
+only when the node's provenance names that event and its offsets are valid.

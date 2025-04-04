@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from famulix.encoding import (
     day_segment,
+    decode_fact_candidate,
     encode_events_to_graph,
     extract_entities,
+    extract_fact_candidate_spans,
     extract_fact_candidates,
 )
 from famulix.events import message_event, note_event
@@ -78,6 +80,28 @@ def test_extract_fact_candidates_respects_threshold() -> None:
     all_candidates = extract_fact_candidates(evt, min_confidence=0.0)
     high_threshold = extract_fact_candidates(evt, min_confidence=0.99)
     assert len(all_candidates) >= len(high_threshold)
+
+
+def test_fact_candidate_spans_decode_to_exact_source_text() -> None:
+    source = "  Alice will lead the project.  Bob owns the follow-up。"
+    event = note_event(100, "notes", source)
+    spans = extract_fact_candidate_spans(event)
+
+    assert [source[start:end] for _text, _score, start, end in spans] == [
+        text for text, _score, _start, _end in spans
+    ]
+    graph = encode_events_to_graph([event], tz_offset_hours=0)
+    facts = [node for node in graph.all_nodes() if node.kind == "fact"]
+    assert [decode_fact_candidate(event, node) for node in facts] == [node.body for node in facts]
+
+
+def test_fact_decoder_rejects_wrong_source_event() -> None:
+    first = note_event(100, "notes", "Alice will lead.")
+    second = note_event(101, "notes", "Alice will lead.")
+    graph = encode_events_to_graph([first], tz_offset_hours=0)
+    fact = next(node for node in graph.all_nodes() if node.kind == "fact")
+
+    assert decode_fact_candidate(second, fact) is None
 
 
 def test_encode_events_to_graph_produces_episodes_and_facts() -> None:

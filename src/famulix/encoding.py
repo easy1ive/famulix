@@ -6,6 +6,7 @@ memory graph. Rule-based extraction; no model calls in the base path.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 
 from famulix.clock import day_start_epoch
@@ -83,13 +84,33 @@ def extract_fact_candidates(event: Event, min_confidence: float = 0.5) -> list[t
     This is a rule-based baseline: each sentence-clause pair becomes a
     candidate, weighted by commitment language and length.
     """
+    return [
+        (candidate, confidence)
+        for candidate, confidence, _start, _end in extract_fact_candidate_spans(
+            event, min_confidence
+        )
+    ]
+
+
+def extract_fact_candidate_spans(
+    event: Event, min_confidence: float = 0.5
+) -> list[tuple[str, float, int, int]]:
+    """Return candidate text, confidence, and exact source character offsets."""
     text = event.data.get("text", "") or event.data.get("title", "")
     if not text:
         return []
     commitment_markers = ["will", "must", "always", "never", "is a", "is the", "决定"]
-    sentences = [s.strip() for s in text.replace("。", ".").split(".") if s.strip()]
-    candidates: list[tuple[str, float]] = []
-    for sent in sentences[:5]:
+    candidates: list[tuple[str, float, int, int]] = []
+    clauses_seen = 0
+    for match in re.finditer(r"[^.。]+", text):
+        raw = match.group()
+        leading = len(raw) - len(raw.lstrip())
+        sent = raw.strip()
+        if not sent:
+            continue
+        clauses_seen += 1
+        if clauses_seen > 5:
+            break
         conf = 0.5 + min(len(sent) / 400, 0.3)
         lowered = sent.lower()
         for marker in commitment_markers:
@@ -98,8 +119,24 @@ def extract_fact_candidates(event: Event, min_confidence: float = 0.5) -> list[t
                 break
         conf = round(min(conf, 0.99), 6)
         if conf >= min_confidence:
-            candidates.append((sent, conf))
+            start = match.start() + leading
+            candidates.append((sent, conf, start, start + len(sent)))
     return candidates
+
+
+def decode_fact_candidate(event: Event, node: MemoryNode) -> str | None:
+    """Reconstruct an encoded fact's source span when its event is available."""
+    if node.kind != "fact" or node.metadata.get("source_event") != event.event_id:
+        return None
+    try:
+        start = int(node.metadata["source_start"])
+        end = int(node.metadata["source_end"])
+    except (KeyError, ValueError):
+        return None
+    source = event.data.get("text", "") or event.data.get("title", "")
+    if start < 0 or end < start or end > len(source):
+        return None
+    return source[start:end]
 
 
 def encode_events_to_graph(
@@ -132,7 +169,7 @@ def encode_events_to_graph(
                 g.add_edge(MemoryEdge.create(ep.node_id, enode.node_id, "mentions"))
 
             # Fact candidates
-            for fact_text, conf in extract_fact_candidates(evt):
+            for fact_text, conf, start, end in extract_fact_candidate_spans(evt):
                 fnode = MemoryNode.create(
                     "fact",
                     fact_text[:60],
@@ -140,6 +177,8 @@ def encode_events_to_graph(
                     metadata={
                         "confidence": str(conf),
                         "source_event": evt.event_id,
+                        "source_start": str(start),
+                        "source_end": str(end),
                     },
                     created_at_s=evt.timestamp_s,
                 )
