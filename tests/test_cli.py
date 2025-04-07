@@ -200,6 +200,34 @@ def test_ingest_reports_invalid_event_file(tmp_path, capsys) -> None:
     assert "famulix ingest:" in capsys.readouterr().err
 
 
+def test_replay_and_diff_verify_session_files(tmp_path, capsys) -> None:
+    import json
+
+    from famulix.session import SessionRecorder
+
+    left = SessionRecorder(session_id="fixture", seed=9)
+    left.record("decision", {"selection": "agenda"}, 12)
+    right = SessionRecorder(session_id="fixture", seed=9)
+    right.record("decision", {"selection": "agenda"}, 12)
+    path_a = tmp_path / "a.jsonl"
+    path_b = tmp_path / "b.jsonl"
+    left.save(path_a)
+    right.save(path_b)
+
+    assert main(["replay", str(path_a)]) == 0
+    assert "Verified session fixture: 1 frames" in capsys.readouterr().out
+    assert main(["diff", str(path_a), str(path_b)]) == 0
+    assert json.loads(capsys.readouterr().out)["identical"] is True
+
+
+def test_replay_rejects_corrupt_session_file(tmp_path, capsys) -> None:
+    path = tmp_path / "corrupt.jsonl"
+    path.write_text("{}\n", encoding="utf-8")
+
+    assert main(["replay", str(path)]) == 2
+    assert "famulix replay:" in capsys.readouterr().err
+
+
 def test_demo_with_persona_flag():
     rc = main(["demo", "--persona", "bailey", "--days", "3"])
     assert rc == 0
