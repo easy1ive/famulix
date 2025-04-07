@@ -179,6 +179,27 @@ def test_export_jsonl(capsys):
         json.loads(line)  # must be valid JSON per line
 
 
+def test_ingest_reads_and_projects_event_envelopes(tmp_path, capsys) -> None:
+    from famulix.events import note_event
+
+    event = note_event(1_700_000_000, "notes", "Alice will lead the review")
+    path = tmp_path / "events.jsonl"
+    path.write_text(event.to_envelope().to_jsonl_line() + "\n", encoding="utf-8")
+
+    assert main(["ingest", str(path)]) == 0
+    output = capsys.readouterr().out
+    assert "Ingested 1 events" in output
+    assert "Facts:    1" in output
+
+
+def test_ingest_reports_invalid_event_file(tmp_path, capsys) -> None:
+    path = tmp_path / "invalid.jsonl"
+    path.write_text("not json\n", encoding="utf-8")
+
+    assert main(["ingest", str(path)]) == 2
+    assert "famulix ingest:" in capsys.readouterr().err
+
+
 def test_demo_with_persona_flag():
     rc = main(["demo", "--persona", "bailey", "--days", "3"])
     assert rc == 0
