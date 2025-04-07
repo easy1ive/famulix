@@ -360,7 +360,23 @@ def cmd_forget(args: argparse.Namespace) -> int:
 
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest events from a JSONL file."""
-    print(f"Would ingest events from: {args.path}")
+    from pathlib import Path
+
+    from famulix.encoding import encode_events_to_graph
+    from famulix.envelope import Envelope
+    from famulix.events import Event
+
+    try:
+        lines = Path(args.path).read_text(encoding="utf-8").splitlines()
+        events = [Event.from_envelope(Envelope.from_jsonl_line(line)) for line in lines if line]
+        graph = encode_events_to_graph(events)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"famulix ingest: {exc}", file=sys.stderr)
+        return 2
+    print(f"Ingested {len(events)} events into {graph.node_count()} memory nodes")
+    print(f"  Episodes: {sum(node.kind == 'episode' for node in graph.all_nodes())}")
+    print(f"  Facts:    {sum(node.kind == 'fact' for node in graph.all_nodes())}")
+    print(f"  Entities: {sum(node.kind == 'entity' for node in graph.all_nodes())}")
     return 0
 
 
