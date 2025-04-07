@@ -425,14 +425,30 @@ def cmd_privacy(args: argparse.Namespace) -> int:
 
 
 def cmd_replay(args: argparse.Namespace) -> int:
-    """Replay a session recording (placeholder)."""
-    print(f"Would replay session from: {args.path}")
+    """Verify and summarize a recorded session."""
+    from famulix.session import SessionRecorder
+
+    try:
+        recorder = SessionRecorder.load(args.path)
+    except (OSError, ValueError) as exc:
+        print(f"famulix replay: {exc}", file=sys.stderr)
+        return 2
+    print(f"Verified session {recorder.session_id}: {len(recorder.entries)} frames")
+    print(f"Digest: {recorder.digest()}")
     return 0
 
 
 def cmd_diff(args: argparse.Namespace) -> int:
-    """Diff two sessions (placeholder)."""
-    print(f"Would diff: {args.path_a} vs {args.path_b}")
+    """Compare two verified session recordings."""
+    from famulix.session import SessionRecorder, session_diff
+
+    try:
+        left = SessionRecorder.load(args.path_a)
+        right = SessionRecorder.load(args.path_b)
+    except (OSError, ValueError) as exc:
+        print(f"famulix diff: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(session_diff(left, right), indent=2, sort_keys=True))
     return 0
 
 
