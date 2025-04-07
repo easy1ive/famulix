@@ -141,6 +141,30 @@ def test_default_personas_have_required_fields():
         assert len(persona.device_mix) > 0
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"timezone_offset": 15},
+        {"work_start_hour": 18, "work_end_hour": 9},
+        {"note_frequency": 1.01},
+        {"calendar_frequency": -0.1},
+        {"device_mix": ()},
+        {"name": " "},
+    ],
+)
+def test_persona_profile_rejects_invalid_generation_settings(changes: dict[str, object]) -> None:
+    from dataclasses import replace
+
+    with pytest.raises(ValueError):
+        replace(DEFAULT_PERSONAS["alex"], **changes)
+
+
+@pytest.mark.parametrize("days", [0, -1, 1.5])
+def test_history_factory_requires_positive_whole_days(days: int) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        HistoryFactory(DEFAULT_PERSONAS["alex"], days=days)
+
+
 def test_factory_direct_construction():
     persona = DEFAULT_PERSONAS["alex"]
     factory = HistoryFactory(persona, seed=123, days=10)

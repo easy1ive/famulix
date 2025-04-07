@@ -42,6 +42,24 @@ class PersonaProfile:
     calendar_frequency: float = 0.4
     file_frequency: float = 0.2
 
+    def __post_init__(self) -> None:
+        if not self.persona_id.strip() or not self.name.strip():
+            raise ValueError("persona id and name must be non-empty")
+        if not -14 <= self.timezone_offset <= 14:
+            raise ValueError("persona timezone offset must be within UTC-14..UTC+14")
+        if not 0 <= self.work_start_hour < self.work_end_hour <= 24:
+            raise ValueError("persona work hours must satisfy 0 <= start < end <= 24")
+        if not self.device_mix or any(not device.strip() for device in self.device_mix):
+            raise ValueError("persona device mix must contain non-empty device names")
+        frequencies = (
+            self.note_frequency,
+            self.message_frequency,
+            self.calendar_frequency,
+            self.file_frequency,
+        )
+        if any(not 0 <= frequency <= 1 for frequency in frequencies):
+            raise ValueError("persona event frequencies must be within [0, 1]")
+
 
 DEFAULT_PERSONAS: dict[str, PersonaProfile] = {
     "alex": PersonaProfile(
@@ -114,6 +132,8 @@ class HistoryFactory:
     """Deterministic synthetic personal history generator."""
 
     def __init__(self, persona: PersonaProfile, seed: int = 0, days: int = 90) -> None:
+        if type(days) is not int or days < 1:
+            raise ValueError("history days must be a positive integer")
         self.persona = persona
         self.seed = seed
         self.days = days
