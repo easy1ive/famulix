@@ -164,7 +164,9 @@ def test_export_json(capsys):
     import json
 
     data = json.loads(captured.out)
-    assert isinstance(data, list)
+    assert data["schema_version"] == 1
+    assert data["nodes"]
+    assert data["edges"]
 
 
 def test_export_jsonl(capsys):
@@ -175,8 +177,9 @@ def test_export_jsonl(capsys):
     assert len(lines) > 0
     import json
 
-    for line in lines:
-        json.loads(line)  # must be valid JSON per line
+    records = [json.loads(line) for line in lines]
+    assert records[0] == {"record_type": "graph", "schema_version": 1}
+    assert {record["record_type"] for record in records[1:]} == {"node", "edge"}
 
 
 def test_ingest_reads_and_projects_event_envelopes(tmp_path, capsys) -> None:

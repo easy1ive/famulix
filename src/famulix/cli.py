@@ -383,15 +383,15 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 def cmd_export(args: argparse.Namespace) -> int:
     """Export the demo memory graph."""
     graph, _now = _build_demo_graph("alex", 0, 7)
-    nodes = [
-        {"id": n.node_id, "kind": n.kind, "title": n.title, "body": n.body}
-        for n in graph.all_nodes()
-    ]
+    serialized = graph.to_dict()
     if args.format == "jsonl":
-        for node in nodes:
-            print(json.dumps(node, sort_keys=True, ensure_ascii=False))
+        print(json.dumps({"record_type": "graph", "schema_version": 1}, sort_keys=True))
+        for node in serialized["nodes"]:
+            print(json.dumps({"record_type": "node", **node}, sort_keys=True, ensure_ascii=False))
+        for edge in serialized["edges"]:
+            print(json.dumps({"record_type": "edge", **edge}, sort_keys=True, ensure_ascii=False))
     else:
-        print(json.dumps(nodes, indent=2, sort_keys=True, ensure_ascii=False))
+        print(json.dumps(serialized, indent=2, sort_keys=True, ensure_ascii=False))
     return 0
 
 
