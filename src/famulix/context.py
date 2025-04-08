@@ -7,6 +7,7 @@ optimal on small instances.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -53,14 +54,25 @@ def estimate_tokens(text: str) -> int:
     return max(1, int(np.ceil(len(text) / 4.0)))
 
 
+def _validate_inputs(items: Sequence[ContextItem], budget: int) -> None:
+    if type(budget) is not int or budget < 0:
+        raise ValueError("budget must be a non-negative integer")
+    for item in items:
+        if type(item.token_estimate) is not int or item.token_estimate <= 0:
+            raise ValueError("context item token estimates must be positive integers")
+        if not math.isfinite(item.value) or item.value < 0:
+            raise ValueError("context item values must be finite and non-negative")
+
+
 def knapsack_dp(items: Sequence[ContextItem], budget: int) -> list[int]:
     """0/1 knapsack exact DP. Returns indices of selected items.
 
     Maximizes value subject to total weight <= budget.
     Returns the list of selected indices in arbitrary order.
     """
+    _validate_inputs(items, budget)
     n = len(items)
-    if n == 0 or budget <= 0:
+    if n == 0 or budget == 0:
         return []
 
     weights = [it.token_estimate for it in items]
@@ -97,7 +109,8 @@ def knapsack_greedy(items: Sequence[ContextItem], budget: int) -> list[int]:
     Used as a comparator to sanity-check DP results (DP should never underperform
     greedy on any instance).
     """
-    if not items or budget <= 0:
+    _validate_inputs(items, budget)
+    if not items or budget == 0:
         return []
     indices = list(range(len(items)))
     # Sort by value/weight ratio, descending
@@ -125,6 +138,7 @@ def assemble_context(
 
     By default uses exact DP for optimality. Set use_dp=False for greedy.
     """
+    _validate_inputs(items, budget)
     # Filter out items that exceed the budget entirely
     eligible = [it for it in items if it.token_estimate <= budget]
 

@@ -156,3 +156,12 @@ def test_assembly_result_type() -> None:
     assert isinstance(result, AssemblyResult)
     assert isinstance(result.items, list)
     assert len(result.items) == 1
+
+
+def test_assembly_rejects_invalid_budget_and_item_scores() -> None:
+    with pytest.raises(ValueError, match="budget"):
+        assemble_context([], budget=-1)
+    with pytest.raises(ValueError, match="positive integers"):
+        assemble_context([_item(1, 0, 1.0)], budget=10)
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        assemble_context([_item(1, 2, float("inf"))], budget=10)
