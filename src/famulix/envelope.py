@@ -30,6 +30,12 @@ class Envelope:
         payload: dict[str, Any],
         schema_version: int = SCHEMA_VERSION_CURRENT,
     ) -> Envelope:
+        if not isinstance(kind, str) or not kind.strip():
+            raise ValueError("envelope kind must be non-empty")
+        if type(schema_version) is not int or schema_version != SCHEMA_VERSION_CURRENT:
+            raise ValueError(f"unsupported envelope schema version: {schema_version}")
+        if not isinstance(payload, dict):
+            raise ValueError("envelope payload must be an object")
         inner = stable_json_dumps(payload).encode("utf-8")
         return cls(
             schema_version=schema_version,
@@ -48,11 +54,23 @@ class Envelope:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Envelope:
+        required = {"schemaVersion", "kind", "payload", "checksum"}
+        if set(data) != required:
+            raise ValueError("envelope has unknown or missing fields")
+        schema_version = data["schemaVersion"]
+        if type(schema_version) is not int or schema_version != SCHEMA_VERSION_CURRENT:
+            raise ValueError(f"unsupported envelope schema version: {schema_version}")
+        if not isinstance(data["kind"], str) or not data["kind"]:
+            raise ValueError("envelope kind must be a non-empty string")
+        if not isinstance(data["payload"], dict):
+            raise ValueError("envelope payload must be an object")
+        if not isinstance(data["checksum"], str):
+            raise ValueError("envelope checksum must be a string")
         env = cls(
-            schema_version=int(data["schemaVersion"]),
-            kind=str(data["kind"]),
-            payload=dict(data["payload"]),
-            checksum=str(data["checksum"]),
+            schema_version=schema_version,
+            kind=data["kind"],
+            payload=data["payload"],
+            checksum=data["checksum"],
         )
         env.verify()
         return env
@@ -66,8 +84,18 @@ class Envelope:
         return True
 
     def to_jsonl_line(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        return stable_json_dumps(self.to_dict())
 
     @classmethod
     def from_jsonl_line(cls, line: str) -> Envelope:
-        return cls.from_dict(json.loads(line))
+        try:
+            data = json.loads(line, parse_constant=_reject_json_constant)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid envelope JSON") from exc
+        if not isinstance(data, dict):
+            raise ValueError("envelope JSON must contain an object")
+        return cls.from_dict(data)
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
