@@ -50,6 +50,25 @@ def test_delete_cascades_edges() -> None:
     # a is still there
     assert g.has_node(a.node_id)
     assert g.get_node(a.node_id).is_active
+    assert all(
+        edge.edge_id in {item.edge_id for item in g.all_edges()} for edge in g.out_edges(a.node_id)
+    )
+    assert all(edge.to_id != b.node_id for edge in g.out_edges(a.node_id))
+
+
+def test_delete_keeps_all_adjacency_indexes_consistent() -> None:
+    graph = MemoryGraph()
+    nodes = [MemoryNode.create("fact", str(index), f"body {index}") for index in range(3)]
+    for node in nodes:
+        graph.add_node(node)
+    graph.add_edge(MemoryEdge.create(nodes[0].node_id, nodes[1].node_id, "mentions"))
+    graph.add_edge(MemoryEdge.create(nodes[1].node_id, nodes[2].node_id, "part_of"))
+
+    delete_memory(graph, nodes[1].node_id)
+    live_edge_ids = {edge.edge_id for edge in graph.all_edges()}
+    for node in graph.all_nodes():
+        assert {edge.edge_id for edge in graph.out_edges(node.node_id)} <= live_edge_ids
+        assert {edge.edge_id for edge in graph.in_edges(node.node_id)} <= live_edge_ids
 
 
 def test_audit_report_counts() -> None:
