@@ -13,7 +13,9 @@ def content_checksum(data: bytes) -> str:
 
 def stable_json_dumps(obj: object) -> str:
     """JSON serialization with sorted keys for deterministic output."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
 
 
 def content_id(prefix: str, payload: str) -> str:
