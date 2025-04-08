@@ -157,3 +157,17 @@ def test_retrieval_deterministic() -> None:
     r2 = hybrid_score("fruit", graph=g, index=idx, now_s=500)
     assert [x.node_id for x in r1] == [x.node_id for x in r2]
     assert [round(x.score, 6) for x in r1] == [round(x.score, 6) for x in r2]
+
+
+def test_hybrid_score_breaks_equal_scores_by_memory_id() -> None:
+    graph = MemoryGraph()
+    nodes = [
+        MemoryNode.create("fact", "same", "same text", metadata={"case": str(i)}) for i in range(2)
+    ]
+    for node in nodes:
+        graph.add_node(node)
+    index = BM25Index()
+    for node in nodes:
+        index.add_node(node)
+    results = hybrid_score("absent", graph=graph, index=index, now_s=1000000000)
+    assert [item.node_id for item in results] == sorted(node.node_id for node in nodes)

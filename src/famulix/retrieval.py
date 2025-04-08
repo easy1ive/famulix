@@ -185,7 +185,7 @@ def hybrid_score(
 
     # Verify citations resolve to existing nodes
     results: list[RetrievalResult] = []
-    for nid, score in sorted(fused.items(), key=lambda x: x[1], reverse=True):
+    for nid, score in sorted(fused.items(), key=lambda x: (-x[1], x[0])):
         result_node = graph.get_node(nid)
         if result_node is None or not result_node.is_active:
             continue
@@ -210,7 +210,7 @@ def mmr_rerank(
         return []
     top_k = min(top_k, len(results))
     selected: list[str] = []
-    remaining = [r.node_id for r in results]
+    remaining = sorted(r.node_id for r in results)
     score_map = {r.node_id: r.score for r in results}
     citation_map = {r.node_id: r.citation for r in results}
 
