@@ -12,7 +12,7 @@ Invariants:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from famulix.types import MemoryId
 from famulix.utils import content_id, stable_json_dumps
@@ -172,7 +172,7 @@ class MemoryGraph:
     def all_edges(self) -> list[MemoryEdge]:
         return list(self._edges.values())
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         """Return a versioned, deterministic representation of the graph."""
         nodes = [
             {
