@@ -171,3 +171,14 @@ def test_hybrid_score_breaks_equal_scores_by_memory_id() -> None:
         index.add_node(node)
     results = hybrid_score("absent", graph=graph, index=index, now_s=1000000000)
     assert [item.node_id for item in results] == sorted(node.node_id for node in nodes)
+
+
+def test_fusion_config_rejects_invalid_weight_sets() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        FusionConfig(bm25_weight=float("nan"))
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        FusionConfig(recency_weight=-0.1)
+    with pytest.raises(ValueError, match="at least one"):
+        FusionConfig(0.0, 0.0, 0.0)
