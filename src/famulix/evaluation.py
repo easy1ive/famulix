@@ -21,11 +21,13 @@ from typing import Any, Literal
 from famulix.briefing import build_briefing
 from famulix.consolidation import consolidate_graph
 from famulix.context import ContextItem, assemble_context, estimate_tokens
+from famulix.deletion import delete_memory
 from famulix.encoding import encode_events_to_graph
 from famulix.events import Event
 from famulix.factory import generate_history_with_truth
 from famulix.memory_graph import MemoryGraph
 from famulix.preferences import PreferenceProfile
+from famulix.privacy import PolicyEngine, PrivacyGate
 from famulix.retrieval import BM25Index, hybrid_score
 
 FeedbackRating = Literal["up", "down", "skip", "accept", "decline", "edit"]
@@ -290,6 +292,34 @@ def run_full_evaluation(
         )
     brier = eval_preference_calibration(profile, truth["preference_signals"], now_s)
 
+    # Exercise the export guard with an explicitly lower-tier destination.
+    privacy_gate = PrivacyGate(PolicyEngine(default_effect="allow"))
+    privacy_probe = privacy_gate.request(
+        actor="synthetic-evaluator",
+        action="export",
+        resource="evaluation-probe",
+        data_tier="private",
+        clearance_tier="private",
+        destination_tier="public",
+        timestamp_s=now_s,
+    )
+    privacy_violations = int(privacy_probe.allowed)
+
+    # Delete a live fact and query the rebuilt active-memory index for it.
+    deletion_resurrection_count = 0
+    deletion_target = next(
+        (node for node in graph.all_nodes() if node.kind == "fact" and node.is_active), None
+    )
+    if deletion_target is not None:
+        delete_memory(graph, deletion_target.node_id)
+        post_delete_index = _build_index(graph)
+        post_delete_results = hybrid_score(
+            deletion_target.title, graph=graph, index=post_delete_index, now_s=now_s
+        )
+        deletion_resurrection_count = eval_deletion_resurrection(
+            graph, {deletion_target.node_id}, post_delete_results
+        )
+
     # Replay determinism check (same seed = same events)
     events2, manifest2, truth2 = generate_history_with_truth(
         persona_id, seed=seed, days=days, start_date=start_date
@@ -308,8 +338,8 @@ def run_full_evaluation(
         citation_coverage=citation_coverage,
         budget_adherence=budget_ok,
         budget_violations=budget_violations,
-        privacy_violations=0,
-        deletion_resurrection_count=0,
+        privacy_violations=privacy_violations,
+        deletion_resurrection_count=deletion_resurrection_count,
         replay_deterministic=replay_ok,
         preference_brier_score=brier,
         total_planted_facts=manifest.planted_fact_count,

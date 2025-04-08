@@ -6,6 +6,8 @@ Retrieval combines lexical matches with time and salience signals. Context assem
 
 The daily briefing composes selected memories and includes source IDs on each item. Its HTML and SVG are rendered locally with escaped text. The synthetic history factory supplies reproducible fixtures and planted ground truth; its scores describe mechanics on those fixtures only.
 
+Evaluation runs an explicit private-to-public export probe and counts whether the policy gate permits it. It also tombstones a live synthetic fact, rebuilds the active retrieval index, and counts any resurfacing result. These counters describe those executed checks, not a general privacy certification.
+
 ## Mechanism references
 
 - Packer et al., [MemGPT: Towards LLMs as Operating Systems](https://arxiv.org/abs/2310.08560), for tiered memory as a system design idea.

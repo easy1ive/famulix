@@ -42,6 +42,14 @@ def _mark_deleted(graph: MemoryGraph, node_id: str) -> None:
     )
 
 
+def _remove_edge(graph: MemoryGraph, edge_id: str) -> None:
+    edge = graph._edges.pop(edge_id, None)  # noqa: SLF001
+    if edge is None:
+        return
+    graph._out_edges[edge.from_id].remove(edge_id)  # noqa: SLF001
+    graph._in_edges[edge.to_id].remove(edge_id)  # noqa: SLF001
+
+
 def delete_memory(
     graph: MemoryGraph,
     node_id: str,
@@ -71,11 +79,11 @@ def delete_memory(
         # Remove all connected edges
         for e in list(graph.in_edges(node_id)):
             if e.edge_id in graph._edges:  # noqa: SLF001
-                del graph._edges[e.edge_id]  # noqa: SLF001
+                _remove_edge(graph, e.edge_id)
                 report.deleted_edges.append(e.edge_id)
         for e in list(graph.out_edges(node_id)):
             if e.edge_id in graph._edges:  # noqa: SLF001
-                del graph._edges[e.edge_id]  # noqa: SLF001
+                _remove_edge(graph, e.edge_id)
                 report.deleted_edges.append(e.edge_id)
 
         # Clean up adjacency lists

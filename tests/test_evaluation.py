@@ -217,6 +217,8 @@ def test_run_full_evaluation_basic():
     assert 0.0 <= scorecard.citation_coverage <= 1.0
     assert 0.0 <= scorecard.preference_brier_score <= 1.0
     assert scorecard.replay_deterministic is True
+    assert scorecard.privacy_violations == 0
+    assert scorecard.deletion_resurrection_count == 0
     assert len(scorecard.recall_at_k) > 0
     assert len(scorecard.precision_at_k) > 0
 
