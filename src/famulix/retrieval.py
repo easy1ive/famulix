@@ -109,11 +109,18 @@ class BM25Index:
 
 @dataclass(frozen=True)
 class FusionConfig:
-    """Weights for hybrid score fusion."""
+    """Weights for hybrid score fusion, normalized by their configured sum."""
 
     bm25_weight: float = 0.5
     recency_weight: float = 0.2
     salience_weight: float = 0.3
+
+    def __post_init__(self) -> None:
+        weights = (self.bm25_weight, self.recency_weight, self.salience_weight)
+        if any(not math.isfinite(weight) or weight < 0 for weight in weights):
+            raise ValueError("fusion weights must be finite and non-negative")
+        if sum(weights) <= 0:
+            raise ValueError("at least one fusion weight must be positive")
 
 
 def _normalize(scores: dict[str, float]) -> dict[str, float]:
