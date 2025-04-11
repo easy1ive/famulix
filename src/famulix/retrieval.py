@@ -153,6 +153,12 @@ def hybrid_score(
 
     # BM25
     bm25_raw = index.score(query)
+    live_ids = {
+        node.node_id
+        for node in graph.all_nodes()
+        if node.is_active and (kinds is None or node.kind in kinds)
+    }
+    bm25_raw = {node_id: score for node_id, score in bm25_raw.items() if node_id in live_ids}
 
     # Recency: 1.0 for newest, decaying by age
     recency_raw: dict[str, float] = {}

@@ -182,3 +182,16 @@ def test_fusion_config_rejects_invalid_weight_sets() -> None:
         FusionConfig(recency_weight=-0.1)
     with pytest.raises(ValueError, match="at least one"):
         FusionConfig(0.0, 0.0, 0.0)
+
+
+def test_hybrid_score_candidate_kind_filter_excludes_other_indexed_kinds() -> None:
+    graph = MemoryGraph()
+    fact = MemoryNode.create("fact", "meeting", "project sync", created_at_s=100)
+    episode = MemoryNode.create("episode", "meeting", "project sync", created_at_s=100)
+    graph.add_node(fact)
+    graph.add_node(episode)
+    index = BM25Index()
+    index.add_node(fact)
+    index.add_node(episode)
+    results = hybrid_score("meeting", graph=graph, index=index, now_s=100, candidate_kinds={"fact"})
+    assert [result.node_id for result in results] == [fact.node_id]
