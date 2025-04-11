@@ -115,3 +115,14 @@ def test_render_html_with_svg_charts() -> None:
     html = render_html("R", [], svg_charts=[svg])
     assert "Charts" in html
     assert "<svg>test</svg>" in html
+
+
+def test_heatmap_rejects_ragged_or_invalid_data() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="equal lengths"):
+        svg_heatmap([[1.0, 2.0], [3.0]])
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        svg_heatmap([[float("nan")]])
+    with pytest.raises(ValueError, match="cell_size"):
+        svg_heatmap([[1.0]], cell_size=0)

@@ -166,6 +166,12 @@ def svg_heatmap(
         return "<svg/>"
     rows = len(data)
     cols = len(data[0])
+    if any(len(row) != cols for row in data):
+        raise ValueError("heatmap rows must have equal lengths")
+    if any(not __import__("math").isfinite(value) or value < 0 for row in data for value in row):
+        raise ValueError("heatmap values must be finite and non-negative")
+    if type(cell_size) is not int or cell_size <= 0:
+        raise ValueError("cell_size must be a positive integer")
     max_val = max(max(row) for row in data) or 1.0
     w = cols * cell_size
     h = rows * cell_size
