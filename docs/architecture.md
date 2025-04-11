@@ -18,3 +18,8 @@ Evaluation runs an explicit private-to-public export probe and counts whether th
 - Ebbinghaus, [Memory: A Contribution to Experimental Psychology](https://psychclassics.yorku.ca/Ebbinghaus/), for the historical forgetting-curve concept.
 
 These works motivate mechanisms; famulix provides its own data model and implementation. No result here evaluates a real conversational model.
+
+
+## Daily briefing visuals
+
+The briefing charts aggregate active graph nodes by their stored creation time in the configured UTC+8 view. The day ribbon sums salience by local hour; the heatmap shows the latest seven represented local dates, with each cell summing the same node scores. Empty histories omit the heatmap. These visuals summarize the synthetic or user-provided graph supplied to the offline pipeline; they are not measurements of assistant quality.
