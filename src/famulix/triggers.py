@@ -90,6 +90,12 @@ def generate_triggers(
     Returns triggers sorted by projected firing time (earliest first).
     """
     cfg = config or TriggerConfig()
+    if not 0.0 <= cfg.salience_threshold <= 1.0:
+        raise ValueError("salience_threshold must be within [0, 1]")
+    if cfg.cooldown_seconds < 0 or cfg.max_triggers_per_day < 0:
+        raise ValueError("cooldown and daily trigger limit must be non-negative")
+    if not 0 <= cfg.quiet_hours_start <= 23 or not 0 <= cfg.quiet_hours_end <= 23:
+        raise ValueError("quiet hours must be within [0, 23]")
     covered = already_covered or set()
 
     if _is_quiet_hour(now_s, cfg):
@@ -121,7 +127,26 @@ def generate_triggers(
     candidates = candidates[: cfg.max_triggers_per_day]
 
     triggers: list[Trigger] = []
+    last_fired: dict[str, int] = {}
+    if log is not None:
+        for entry in log.entries:
+            if entry.get("action") == "generated":
+                memory_id = entry.get("memory_id")
+                timestamp = entry.get("timestamp_s")
+                if isinstance(memory_id, str) and type(timestamp) is int:
+                    last_fired[memory_id] = max(last_fired.get(memory_id, timestamp), timestamp)
     for node, score in candidates:
+        previous = last_fired.get(node.node_id)
+        if previous is not None and now_s - previous < cfg.cooldown_seconds:
+            if log is not None:
+                log.record(
+                    timestamp_s=now_s,
+                    trigger_id=f"trig_{node.node_id}",
+                    memory_id=node.node_id,
+                    action="suppressed",
+                    reason="cooldown",
+                )
+            continue
         # Compute trigger time: proportional to salience — higher salience → sooner
         delay = int(3600 * (1.0 - min(score, 0.99)))
         trigger_time = now_s + delay
