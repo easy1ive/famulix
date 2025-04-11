@@ -89,3 +89,25 @@ def test_max_triggers_per_day_cap() -> None:
     cfg = TriggerConfig(salience_threshold=0.01, max_triggers_per_day=5)
     triggers = generate_triggers(g, now_s=1_700_000_000 + 500, config=cfg)
     assert len(triggers) <= 5
+
+
+def test_trigger_cooldown_suppresses_recently_generated_memory() -> None:
+    from famulix.triggers import TriggerLog
+
+    graph = MemoryGraph()
+    node = MemoryNode.create("reminder", "Pinned", "important", created_at_s=1)
+    graph.add_node(node)
+    log = TriggerLog()
+    log.record(timestamp_s=100000, trigger_id="prior", memory_id=node.node_id, action="generated")
+    result = generate_triggers(
+        graph, now_s=100100, config=TriggerConfig(salience_threshold=0), log=log
+    )
+    assert result == []
+    assert log.entries[-1]["reason"] == "cooldown"
+
+
+def test_trigger_config_rejects_out_of_range_hours() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="quiet hours"):
+        generate_triggers(MemoryGraph(), now_s=1, config=TriggerConfig(quiet_hours_start=24))
