@@ -227,16 +227,23 @@ def render_briefing_html(
     # SVG charts
     svg_charts: list[str] = []
     if graph is not None:
-        # Day activity ribbon (synthetic placeholder from salience distribution)
-        scores = score_all_nodes(graph, now_s=int(briefing.metadata.get("seed", "0")) or 0)
-        hour_vals = [0.0] * 24
-        for i, s in enumerate(list(scores.values())[:24]):
-            hour_vals[i % 24] = s
-        svg_charts.append(svg_day_ribbon(hour_vals))
+        scores = score_all_nodes(graph, now_s=int(briefing.metadata.get("generated_at_s", "0")))
+        hourly = [0.0] * 24
+        daily: dict[str, list[float]] = {}
+        from datetime import datetime, timedelta, timezone
 
-        # Simple heatmap (7 days × 24 hours placeholder)
-        heat_data = [[float((d * 24 + h) % 10) / 10 for h in range(24)] for d in range(7)]
-        svg_charts.append(svg_heatmap(heat_data, title="7-day retention heatmap"))
+        for node in graph.all_nodes():
+            if not node.is_active:
+                continue
+            local = datetime.fromtimestamp(node.created_at_s, tz=timezone(timedelta(hours=8)))
+            day = local.date().isoformat()
+            daily.setdefault(day, [0.0] * 24)[local.hour] += scores.get(node.node_id, 0.0)
+            hourly[local.hour] += scores.get(node.node_id, 0.0)
+        svg_charts.append(svg_day_ribbon(hourly))
+        days = sorted(daily)[-7:]
+        heat_data = [daily[day] for day in days]
+        if heat_data:
+            svg_charts.append(svg_heatmap(heat_data, title="Memory salience by local day and hour"))
 
     return render_htm(
         briefing.title,
