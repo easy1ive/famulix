@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 from famulix.briefing import (
     BriefingItem,
     build_briefing,
@@ -195,3 +197,23 @@ def test_connector_pipeline_builds_deterministic_resolvable_briefing() -> None:
     assert [item.title for item in first.items] == [item.title for item in second.items]
     assert all(graph.get_node(memory_id) for memory_id in second.all_cited_memory_ids())
     assert graph.node_count() == second_graph.node_count()
+
+
+def test_briefing_visuals_reflect_graph_activity_dates() -> None:
+    from datetime import datetime
+
+    from famulix.briefing import build_briefing, render_briefing_html
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    node = MemoryNode.create(
+        "fact",
+        "Focus",
+        "ship the draft",
+        created_at_s=int(datetime(2026, 11, 12, 9, tzinfo=UTC).timestamp()),
+    )
+    graph.add_node(node)
+    briefing = build_briefing(graph, date_str="2026-11-12", now_s=node.created_at_s, seed=0)
+    markup = render_briefing_html(briefing, graph=graph)
+    assert "Memory salience by local day and hour" in markup
+    assert "7-day retention heatmap" not in markup
