@@ -217,3 +217,14 @@ def test_briefing_visuals_reflect_graph_activity_dates() -> None:
     markup = render_briefing_html(briefing, graph=graph)
     assert "Memory salience by local day and hour" in markup
     assert "7-day retention heatmap" not in markup
+
+
+def test_empty_briefing_omits_unrepresented_day_heatmap() -> None:
+    from famulix.briefing import build_briefing, render_briefing_html
+    from famulix.memory_graph import MemoryGraph
+
+    graph = MemoryGraph()
+    briefing = build_briefing(graph, date_str="2026-11-12", now_s=0)
+    markup = render_briefing_html(briefing, graph=graph)
+    assert "Memory salience by local day and hour" not in markup
+    assert "<svg" in markup
