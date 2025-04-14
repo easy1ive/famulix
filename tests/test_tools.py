@@ -224,3 +224,24 @@ def test_side_effect_tool_replays_receipt_without_repeating_handler() -> None:
     assert collision.success is False and "different arguments" in (collision.error or "")
     assert missing.success is False and "requires an idempotency key" in (missing.error or "")
     assert calls == ["one"]
+
+
+def test_tool_result_receipt_roundtrip_and_schema_rejection() -> None:
+    import pytest
+
+    from famulix.tools import ToolResult
+
+    original = ToolResult(
+        tool_name="echo",
+        success=True,
+        output={"answer": 3},
+        duration_s=0.125,
+        retries=0,
+        receipt_id="echo_abc",
+    )
+    payload = original.to_dict()
+    assert ToolResult.from_dict(payload).to_dict() == payload
+    with pytest.raises(ValueError, match="schema"):
+        ToolResult.from_dict({**payload, "schema_version": 2})
+    with pytest.raises(ValueError, match="fields"):
+        ToolResult.from_dict({**payload, "success": 1})

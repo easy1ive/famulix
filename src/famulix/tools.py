@@ -115,6 +115,54 @@ class ToolResult:
     retries: int = 0
     receipt_id: str = ""
 
+    def to_dict(self) -> dict[str, object]:
+        """Return a versioned receipt payload with deterministic field order."""
+        return {
+            "schema_version": 1,
+            "tool_name": self.tool_name,
+            "success": self.success,
+            "output": self.output,
+            "error": self.error,
+            "duration_s": round(self.duration_s, 6),
+            "retries": self.retries,
+            "receipt_id": self.receipt_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> ToolResult:
+        """Load a receipt payload, rejecting unknown or malformed fields."""
+        expected = {
+            "schema_version",
+            "tool_name",
+            "success",
+            "output",
+            "error",
+            "duration_s",
+            "retries",
+            "receipt_id",
+        }
+        if set(data) != expected or data.get("schema_version") != 1:
+            raise ValueError("unsupported or malformed tool receipt schema")
+        if (
+            not isinstance(data["tool_name"], str)
+            or type(data["success"]) is not bool
+            or (data["error"] is not None and not isinstance(data["error"], str))
+            or type(data["duration_s"]) not in (int, float)
+            or not math.isfinite(data["duration_s"])
+            or type(data["retries"]) is not int
+            or not isinstance(data["receipt_id"], str)
+        ):
+            raise ValueError("invalid tool receipt fields")
+        return cls(
+            tool_name=data["tool_name"],
+            success=data["success"],
+            output=data["output"],
+            error=data["error"],
+            duration_s=float(data["duration_s"]),
+            retries=data["retries"],
+            receipt_id=data["receipt_id"],
+        )
+
 
 @dataclass
 class ToolRegistry:
