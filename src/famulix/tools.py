@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 import time
 from collections.abc import Callable
@@ -57,16 +58,29 @@ class ToolSpec:
             if expected_type:
                 if expected_type == "string" and not isinstance(value, str):
                     errors.append(f"{name}: expected string, got {type(value).__name__}")
-                elif expected_type == "integer" and not isinstance(value, int):
+                elif expected_type == "integer" and type(value) is not int:
                     errors.append(f"{name}: expected integer, got {type(value).__name__}")
-                elif expected_type == "number" and not isinstance(value, (int, float)):
+                elif expected_type == "number" and type(value) not in (int, float):
                     errors.append(f"{name}: expected number, got {type(value).__name__}")
-                elif expected_type == "boolean" and not isinstance(value, bool):
+                elif expected_type == "number" and not math.isfinite(value):
+                    errors.append(f"{name}: expected finite number, got {type(value).__name__}")
+                elif expected_type == "boolean" and type(value) is not bool:
                     errors.append(f"{name}: expected boolean, got {type(value).__name__}")
                 elif expected_type == "array" and not isinstance(value, list):
                     errors.append(f"{name}: expected array, got {type(value).__name__}")
                 elif expected_type == "object" and not isinstance(value, dict):
                     errors.append(f"{name}: expected object, got {type(value).__name__}")
+
+            if type(value) in (int, float) and type(value) is not bool:
+                if "minimum" in prop and value < prop["minimum"]:
+                    errors.append(f"{name}: value is below minimum {prop['minimum']}")
+                if "maximum" in prop and value > prop["maximum"]:
+                    errors.append(f"{name}: value is above maximum {prop['maximum']}")
+            if isinstance(value, str):
+                if "minLength" in prop and len(value) < prop["minLength"]:
+                    errors.append(f"{name}: string is shorter than minLength {prop['minLength']}")
+                if "maxLength" in prop and len(value) > prop["maxLength"]:
+                    errors.append(f"{name}: string is longer than maxLength {prop['maxLength']}")
 
             # Check enum
             if "enum" in prop and value not in prop["enum"]:

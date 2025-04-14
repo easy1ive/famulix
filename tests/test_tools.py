@@ -148,3 +148,30 @@ def test_tool_receipt_is_stable_across_processes() -> None:
             subprocess.check_output([sys.executable, "-c", code], env=env, text=True).strip()
         )
     assert outputs[0] == outputs[1]
+
+
+def test_tool_argument_validation_enforces_types_and_declared_bounds() -> None:
+    from famulix.tools import ToolSpec
+
+    spec = ToolSpec(
+        name="bounded",
+        description="bounded values",
+        parameters={
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer", "minimum": 1, "maximum": 4},
+                "label": {"type": "string", "minLength": 2, "maxLength": 5},
+                "ratio": {"type": "number"},
+            },
+            "required": ["count", "label", "ratio"],
+        },
+    )
+    assert spec.validate_arguments({"count": 2, "label": "ok", "ratio": 0.5}) == []
+    errors = spec.validate_arguments({"count": True, "label": "x", "ratio": float("inf")})
+    assert any("expected integer" in error for error in errors)
+    assert any("minLength" in error for error in errors)
+    assert any("finite number" in error for error in errors)
+    assert any(
+        "minimum" in error
+        for error in spec.validate_arguments({"count": 0, "label": "valid", "ratio": 1})
+    )
