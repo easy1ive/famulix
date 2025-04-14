@@ -7,6 +7,7 @@ jitter, and policy-gated receipts.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import time
@@ -151,7 +152,8 @@ class ToolRegistry:
                 output = handler(**arguments)
                 duration = time.monotonic() - start
                 args_key = json.dumps(arguments, sort_keys=True)
-                receipt = f"{name}_{abs(hash((name, args_key, idempotency_key or '')))}"
+                receipt_payload = f"{name}\0{args_key}\0{idempotency_key or ''}"
+                receipt = f"{name}_{hashlib.sha256(receipt_payload.encode()).hexdigest()[:20]}"
                 return ToolResult(
                     tool_name=name,
                     success=True,
