@@ -194,3 +194,33 @@ def test_tool_spec_rejects_unsafe_retry_and_invalid_timeouts() -> None:
         ToolSpec(name="slow", description="slow", parameters={}, timeout_seconds=0)
     with pytest.raises(ValueError, match="max_retries"):
         ToolSpec(name="retry", description="retry", parameters={}, max_retries=-1)
+
+
+def test_side_effect_tool_replays_receipt_without_repeating_handler() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    calls: list[str] = []
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="write",
+            description="write",
+            side_effect_class="write",
+            idempotent=True,
+            parameters={
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+                "required": ["value"],
+            },
+        ),
+        lambda value: calls.append(value) or len(calls),
+    )
+    first = registry.execute("write", {"value": "one"}, idempotency_key="request-1")
+    replay = registry.execute("write", {"value": "one"}, idempotency_key="request-1")
+    collision = registry.execute("write", {"value": "two"}, idempotency_key="request-1")
+    missing = registry.execute("write", {"value": "three"})
+    assert first.output == replay.output == 1
+    assert first.receipt_id == replay.receipt_id
+    assert collision.success is False and "different arguments" in (collision.error or "")
+    assert missing.success is False and "requires an idempotency key" in (missing.error or "")
+    assert calls == ["one"]
