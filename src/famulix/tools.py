@@ -32,6 +32,20 @@ class ToolSpec:
     max_retries: int = 0
     idempotent: bool = False
 
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("tool name must not be empty")
+        if not math.isfinite(self.timeout_seconds) or self.timeout_seconds <= 0:
+            raise ValueError("tool timeout must be finite and positive")
+        if type(self.max_retries) is not int or self.max_retries < 0:
+            raise ValueError("max_retries must be a non-negative integer")
+        if (
+            self.side_effect_class in {"write", "mutate"}
+            and self.max_retries
+            and not self.idempotent
+        ):
+            raise ValueError("retrying side-effecting tools requires idempotent=True")
+
     def validate_arguments(self, arguments: dict[str, Any]) -> list[str]:
         """Validate arguments against the parameter schema.
 

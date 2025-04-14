@@ -175,3 +175,22 @@ def test_tool_argument_validation_enforces_types_and_declared_bounds() -> None:
         "minimum" in error
         for error in spec.validate_arguments({"count": 0, "label": "valid", "ratio": 1})
     )
+
+
+def test_tool_spec_rejects_unsafe_retry_and_invalid_timeouts() -> None:
+    import pytest
+
+    from famulix.tools import ToolSpec
+
+    with pytest.raises(ValueError, match="idempotent=True"):
+        ToolSpec(
+            name="write",
+            description="write",
+            parameters={},
+            side_effect_class="write",
+            max_retries=1,
+        )
+    with pytest.raises(ValueError, match="timeout"):
+        ToolSpec(name="slow", description="slow", parameters={}, timeout_seconds=0)
+    with pytest.raises(ValueError, match="max_retries"):
+        ToolSpec(name="retry", description="retry", parameters={}, max_retries=-1)
