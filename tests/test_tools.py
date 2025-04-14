@@ -129,3 +129,22 @@ def test_register_custom_tool() -> None:
     result = reg.execute("greet", {"name": "world"})
     assert result.success
     assert result.output == "hello, world!"
+
+
+def test_tool_receipt_is_stable_across_processes() -> None:
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "from famulix.tools import build_default_registry; "
+        "print(build_default_registry().execute("
+        "'echo', {'text': 'same'}, idempotency_key='step').receipt_id)"
+    )
+    outputs = []
+    for seed in ("17", "901"):
+        env = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONPATH": "src"}
+        outputs.append(
+            subprocess.check_output([sys.executable, "-c", code], env=env, text=True).strip()
+        )
+    assert outputs[0] == outputs[1]
