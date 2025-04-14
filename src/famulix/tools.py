@@ -121,6 +121,7 @@ class ToolRegistry:
     """Registry of available tools with deterministic execution."""
 
     _tools: dict[str, tuple[ToolSpec, Callable[..., Any]]] = field(default_factory=dict)
+    _idempotency_cache: dict[str, tuple[str, ToolResult]] = field(default_factory=dict)
 
     def register(
         self,
@@ -161,6 +162,27 @@ class ToolRegistry:
             )
 
         spec, handler = self._tools[name]
+        if spec.side_effect_class in {"write", "mutate"} and not idempotency_key:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                output=None,
+                error="side-effecting tool requires an idempotency key",
+            )
+        signature = json.dumps(arguments, sort_keys=True, separators=(",", ":"))
+        if idempotency_key and spec.side_effect_class in {"write", "mutate"}:
+            cached = self._idempotency_cache.get(f"{name}:{idempotency_key}")
+            if cached is not None:
+                if cached[0] != signature:
+                    return ToolResult(
+                        tool_name=name,
+                        success=False,
+                        output=None,
+                        error="idempotency key was already used with different arguments",
+                    )
+                from dataclasses import replace
+
+                return replace(cached[1])
         errors = spec.validate_arguments(arguments)
         if errors:
             return ToolResult(
@@ -182,7 +204,7 @@ class ToolRegistry:
                 args_key = json.dumps(arguments, sort_keys=True)
                 receipt_payload = f"{name}\0{args_key}\0{idempotency_key or ''}"
                 receipt = f"{name}_{hashlib.sha256(receipt_payload.encode()).hexdigest()[:20]}"
-                return ToolResult(
+                result = ToolResult(
                     tool_name=name,
                     success=True,
                     output=output,
@@ -190,6 +212,9 @@ class ToolRegistry:
                     retries=retries,
                     receipt_id=receipt,
                 )
+                if idempotency_key and spec.side_effect_class in {"write", "mutate"}:
+                    self._idempotency_cache[f"{name}:{idempotency_key}"] = (signature, result)
+                return result
             except Exception as e:  # noqa: BLE001
                 last_error = str(e)
                 retries = attempt + 1
