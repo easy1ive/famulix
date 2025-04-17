@@ -268,3 +268,15 @@ def test_tool_registry_requires_declared_capability_grants() -> None:
     assert denied.success is False and "personal.data" in (denied.error or "")
     assert allowed.success is True and allowed.output == "message"
     assert partial.success is False
+
+
+def test_tool_registry_lists_specs_in_name_order() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry()
+    for name in ("zeta", "alpha", "mu"):
+        registry.register(
+            ToolSpec(name=name, description=name, parameters={"type": "object"}),
+            lambda: None,
+        )
+    assert [spec.name for spec in registry.list_specs()] == ["alpha", "mu", "zeta"]

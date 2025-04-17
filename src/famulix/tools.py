@@ -184,7 +184,8 @@ class ToolRegistry:
         return self._tools[name][0]
 
     def list_specs(self) -> list[ToolSpec]:
-        return [spec for spec, _ in self._tools.values()]
+        """Return registered tool specifications in stable name order."""
+        return [self._tools[name][0] for name in sorted(self._tools)]
 
     def has_tool(self, name: str) -> bool:
         return name in self._tools
