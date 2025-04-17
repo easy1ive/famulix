@@ -196,8 +196,9 @@ class ToolRegistry:
         *,
         idempotency_key: str | None = None,
         seed: int = 0,
+        granted_capabilities: set[str] | None = None,
     ) -> ToolResult:
-        """Execute a tool with validation and bounded retries.
+        """Execute a tool with validation, capability checks, and bounded retries.
 
         The seed parameter is used for deterministic jitter in retries.
         """
@@ -210,6 +211,14 @@ class ToolRegistry:
             )
 
         spec, handler = self._tools[name]
+        missing_capabilities = spec.capability_tags - (granted_capabilities or set())
+        if missing_capabilities:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                output=None,
+                error="missing capabilities: " + ", ".join(sorted(missing_capabilities)),
+            )
         if spec.side_effect_class in {"write", "mutate"} and not idempotency_key:
             return ToolResult(
                 tool_name=name,

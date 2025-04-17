@@ -245,3 +245,26 @@ def test_tool_result_receipt_roundtrip_and_schema_rejection() -> None:
         ToolResult.from_dict({**payload, "schema_version": 2})
     with pytest.raises(ValueError, match="fields"):
         ToolResult.from_dict({**payload, "success": 1})
+
+
+def test_tool_registry_requires_declared_capability_grants() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="read_mail",
+            description="read mail",
+            parameters={"type": "object"},
+            capability_tags=frozenset({"mail.read", "personal.data"}),
+        ),
+        lambda: "message",
+    )
+    denied = registry.execute("read_mail", {})
+    allowed = registry.execute(
+        "read_mail", {}, granted_capabilities={"mail.read", "personal.data", "extra"}
+    )
+    partial = registry.execute("read_mail", {}, granted_capabilities={"mail.read"})
+    assert denied.success is False and "personal.data" in (denied.error or "")
+    assert allowed.success is True and allowed.output == "message"
+    assert partial.success is False
