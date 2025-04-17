@@ -111,3 +111,24 @@ def test_failed_step_in_history() -> None:
     assert state.history[0].error is not None
     summary = execution_summary(state)
     assert summary["failures"] == 1
+
+
+def test_executor_passes_only_explicit_capability_grants_to_tools() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="mail",
+            description="read mail",
+            parameters={"type": "object"},
+            capability_tags=frozenset({"mail.read"}),
+        ),
+        lambda: "ok",
+    )
+    plan = Plan(plan_id="capability", steps=[PlanStep(id="read", tool="mail")])
+    denied = execute_plan(plan, registry)
+    allowed = execute_plan(plan, registry, granted_capabilities={"mail.read"})
+    assert denied.history[0].success is False
+    assert "missing capabilities" in (denied.history[0].error or "")
+    assert allowed.history[0].success is True

@@ -59,6 +59,7 @@ def execute_plan(
     *,
     budget: ExecutionBudget | None = None,
     seed: int = 0,
+    granted_capabilities: set[str] | None = None,
 ) -> ExecutionState:
     """Execute a validated plan step by step.
 
@@ -92,7 +93,13 @@ def execute_plan(
             continue
 
         # Execute the step
-        result = registry.execute(step.tool, step.inputs, idempotency_key=step.id, seed=seed)
+        result = registry.execute(
+            step.tool,
+            step.inputs,
+            idempotency_key=step.id,
+            seed=seed,
+            granted_capabilities=granted_capabilities,
+        )
 
         step_exec = StepExecution(
             step_id=step.id,
