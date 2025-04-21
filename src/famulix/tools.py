@@ -45,6 +45,25 @@ class ToolSpec:
             and not self.idempotent
         ):
             raise ValueError("retrying side-effecting tools requires idempotent=True")
+        if not isinstance(self.parameters, dict) or self.parameters.get("type") != "object":
+            raise ValueError("tool parameters must use an object schema")
+        properties = self.parameters.get("properties", {})
+        required = self.parameters.get("required", [])
+        if not isinstance(properties, dict) or not isinstance(required, list):
+            raise ValueError("tool schema properties and required fields have invalid shapes")
+        if any(
+            not isinstance(name, str) or not isinstance(spec, dict)
+            for name, spec in properties.items()
+        ):
+            raise ValueError("tool schema properties must map names to objects")
+        if any(not isinstance(name, str) or name not in properties for name in required):
+            raise ValueError("tool schema required fields must name declared properties")
+        supported = {"string", "integer", "number", "boolean", "array", "object"}
+        for name, spec in properties.items():
+            if spec.get("type") not in supported:
+                raise ValueError(f"tool schema property {name} has an unsupported type")
+            if "enum" in spec and not isinstance(spec["enum"], list):
+                raise ValueError(f"tool schema property {name} enum must be a list")
 
     def validate_arguments(self, arguments: dict[str, Any]) -> list[str]:
         """Validate arguments against the parameter schema.
