@@ -297,3 +297,24 @@ def test_registry_rejects_duplicate_tool_names() -> None:
             lambda: "second",
         )
     assert registry.execute("same", {}).output == "first"
+
+
+def test_tool_spec_rejects_malformed_schemas() -> None:
+    import pytest
+
+    from famulix.tools import ToolSpec
+
+    with pytest.raises(ValueError, match="object schema"):
+        ToolSpec(name="bad", description="bad", parameters={"type": "string"})
+    with pytest.raises(ValueError, match="required fields"):
+        ToolSpec(
+            name="bad",
+            description="bad",
+            parameters={"type": "object", "properties": {}, "required": ["x"]},
+        )
+    with pytest.raises(ValueError, match="unsupported type"):
+        ToolSpec(
+            name="bad",
+            description="bad",
+            parameters={"type": "object", "properties": {"x": {"type": "record"}}},
+        )
