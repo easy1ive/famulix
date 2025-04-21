@@ -280,3 +280,20 @@ def test_tool_registry_lists_specs_in_name_order() -> None:
             lambda: None,
         )
     assert [spec.name for spec in registry.list_specs()] == ["alpha", "mu", "zeta"]
+
+
+def test_registry_rejects_duplicate_tool_names() -> None:
+    import pytest
+
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(name="same", description="first", parameters={"type": "object"}), lambda: "first"
+    )
+    with pytest.raises(ValueError, match="already registered"):
+        registry.register(
+            ToolSpec(name="same", description="second", parameters={"type": "object"}),
+            lambda: "second",
+        )
+    assert registry.execute("same", {}).output == "first"

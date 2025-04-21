@@ -176,6 +176,8 @@ class ToolRegistry:
         spec: ToolSpec,
         handler: Callable[..., Any],
     ) -> None:
+        if spec.name in self._tools:
+            raise ValueError(f"tool already registered: {spec.name}")
         self._tools[spec.name] = (spec, handler)
 
     def get_spec(self, name: str) -> ToolSpec | None:
