@@ -42,6 +42,7 @@ class ExecutionState:
     money_spent: float = 0.0
     outputs: dict[str, Any] = field(default_factory=dict)
     history: list[StepExecution] = field(default_factory=list)
+    facts: set[str] = field(default_factory=set)
     terminated: bool = False
     termination_reason: str | None = None
 
@@ -60,13 +61,14 @@ def execute_plan(
     budget: ExecutionBudget | None = None,
     seed: int = 0,
     granted_capabilities: set[str] | None = None,
+    initial_facts: set[str] | None = None,
 ) -> ExecutionState:
     """Execute a validated plan step by step.
 
     Returns the final execution state. If the plan is invalid, returns
     immediately with a termination reason.
     """
-    state = ExecutionState()
+    state = ExecutionState(facts=set(initial_facts or set()))
     budget = budget or ExecutionBudget()
 
     # Validate first
@@ -92,6 +94,15 @@ def execute_plan(
         if step is None:
             continue
 
+        missing_facts = sorted(set(step.preconditions) - state.facts)
+        if missing_facts:
+            message = "unsatisfied preconditions: " + ", ".join(missing_facts)
+            state.history.append(StepExecution(step_id=step.id, success=False, error=message))
+            state.steps_done += 1
+            state.terminated = True
+            state.termination_reason = message
+            break
+
         # Execute the step
         result = registry.execute(
             step.tool,
@@ -111,9 +122,11 @@ def execute_plan(
         state.steps_done += 1
 
         # Rough token cost: length of output string / 4
-        if result.success and result.output is not None:
-            state.tokens_used += len(str(result.output)) // 4
-            state.outputs[step.id] = result.output
+        if result.success:
+            state.facts.update(step.effects)
+            if result.output is not None:
+                state.tokens_used += len(str(result.output)) // 4
+                state.outputs[step.id] = result.output
 
         # Money cost: 0.01 per step by default
         state.money_spent += 0.01
