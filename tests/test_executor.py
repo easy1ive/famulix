@@ -146,3 +146,37 @@ def test_failed_tool_stops_plan_before_following_actions() -> None:
     assert state.terminated
     assert state.termination_reason == "tool failed: bad"
     assert [item.step_id for item in state.history] == ["bad"]
+
+
+def test_execution_preconditions_consume_prior_step_effects() -> None:
+    plan = Plan(
+        plan_id="facts",
+        steps=[
+            PlanStep(id="load", tool="echo", inputs={"text": "mail"}, effects=["mail_loaded"]),
+            PlanStep(
+                id="summarize",
+                tool="echo",
+                inputs={"text": "ready"},
+                depends_on=["load"],
+                preconditions=["mail_loaded"],
+                effects=["summary_ready"],
+            ),
+        ],
+    )
+    state = execute_plan(plan, build_default_registry())
+    assert not state.terminated
+    assert state.facts == {"mail_loaded", "summary_ready"}
+    assert state.outputs["summarize"] == "ready"
+
+
+def test_unsatisfied_precondition_prevents_action() -> None:
+    plan = Plan(
+        plan_id="missing-fact",
+        steps=[
+            PlanStep(id="send", tool="echo", inputs={"text": "send"}, preconditions=["approved"])
+        ],
+    )
+    state = execute_plan(plan, build_default_registry())
+    assert state.terminated and state.steps_done == 1
+    assert state.history[0].success is False
+    assert "approved" in (state.termination_reason or "")
