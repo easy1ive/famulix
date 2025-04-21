@@ -117,6 +117,10 @@ def execute_plan(
 
         # Money cost: 0.01 per step by default
         state.money_spent += 0.01
+        if not result.success:
+            state.terminated = True
+            state.termination_reason = f"tool failed: {step.id}"
+            break
 
     if not state.terminated:
         # Normal completion — mark as done (not terminated early)
