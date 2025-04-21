@@ -132,3 +132,17 @@ def test_executor_passes_only_explicit_capability_grants_to_tools() -> None:
     assert denied.history[0].success is False
     assert "missing capabilities" in (denied.history[0].error or "")
     assert allowed.history[0].success is True
+
+
+def test_failed_tool_stops_plan_before_following_actions() -> None:
+    plan = Plan(
+        plan_id="stop-on-error",
+        steps=[
+            PlanStep(id="bad", tool="echo", inputs={}),
+            PlanStep(id="later", tool="echo", inputs={"text": "must not run"}, depends_on=["bad"]),
+        ],
+    )
+    state = execute_plan(plan, build_default_registry())
+    assert state.terminated
+    assert state.termination_reason == "tool failed: bad"
+    assert [item.step_id for item in state.history] == ["bad"]
