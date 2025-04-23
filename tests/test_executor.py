@@ -101,16 +101,19 @@ def test_execution_outputs_stored() -> None:
 
 
 def test_failed_step_in_history() -> None:
-    plan = Plan(
-        plan_id="test",
-        steps=[PlanStep(id="bad", tool="echo", inputs={})],  # missing required
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    def fail_handler() -> None:
+        raise RuntimeError("scripted failure")
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(name="fail", description="fail", parameters={"type": "object"}), fail_handler
     )
-    reg = build_default_registry()
-    state = execute_plan(plan, reg)
+    state = execute_plan(Plan(plan_id="test", steps=[PlanStep(id="bad", tool="fail")]), registry)
     assert state.history[0].success is False
-    assert state.history[0].error is not None
-    summary = execution_summary(state)
-    assert summary["failures"] == 1
+    assert state.history[0].error == "scripted failure"
+    assert execution_summary(state)["failures"] == 1
 
 
 def test_executor_passes_only_explicit_capability_grants_to_tools() -> None:
@@ -129,20 +132,29 @@ def test_executor_passes_only_explicit_capability_grants_to_tools() -> None:
     plan = Plan(plan_id="capability", steps=[PlanStep(id="read", tool="mail")])
     denied = execute_plan(plan, registry)
     allowed = execute_plan(plan, registry, granted_capabilities={"mail.read"})
-    assert denied.history[0].success is False
-    assert "missing capabilities" in (denied.history[0].error or "")
+    assert denied.steps_done == 0
+    assert "missing capabilities" in (denied.termination_reason or "")
     assert allowed.history[0].success is True
 
 
 def test_failed_tool_stops_plan_before_following_actions() -> None:
+    from famulix.tools import ToolSpec
+
+    def fail_handler() -> None:
+        raise RuntimeError("scripted failure")
+
+    registry = build_default_registry()
+    registry.register(
+        ToolSpec(name="fail", description="fail", parameters={"type": "object"}), fail_handler
+    )
     plan = Plan(
         plan_id="stop-on-error",
         steps=[
-            PlanStep(id="bad", tool="echo", inputs={}),
+            PlanStep(id="bad", tool="fail"),
             PlanStep(id="later", tool="echo", inputs={"text": "must not run"}, depends_on=["bad"]),
         ],
     )
-    state = execute_plan(plan, build_default_registry())
+    state = execute_plan(plan, registry)
     assert state.terminated
     assert state.termination_reason == "tool failed: bad"
     assert [item.step_id for item in state.history] == ["bad"]
@@ -180,3 +192,33 @@ def test_unsatisfied_precondition_prevents_action() -> None:
     assert state.terminated and state.steps_done == 1
     assert state.history[0].success is False
     assert "approved" in (state.termination_reason or "")
+
+
+def test_plan_preflights_every_tool_before_running_the_first() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    calls: list[str] = []
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="record",
+            description="record",
+            parameters={
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+                "required": ["value"],
+            },
+        ),
+        lambda value: calls.append(value),
+    )
+    plan = Plan(
+        plan_id="preflight",
+        steps=[
+            PlanStep(id="first", tool="record", inputs={"value": "no"}),
+            PlanStep(id="second", tool="record", inputs={}, depends_on=["first"]),
+        ],
+    )
+    state = execute_plan(plan, registry)
+    assert state.terminated and state.steps_done == 0
+    assert "preflight failed for second" in (state.termination_reason or "")
+    assert calls == []
