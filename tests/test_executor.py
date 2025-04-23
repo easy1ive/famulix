@@ -222,3 +222,22 @@ def test_plan_preflights_every_tool_before_running_the_first() -> None:
     assert state.terminated and state.steps_done == 0
     assert "preflight failed for second" in (state.termination_reason or "")
     assert calls == []
+
+
+def test_execution_budgets_reject_invalid_limits() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="max_steps"):
+        ExecutionBudget(max_steps=-1)
+    with pytest.raises(ValueError, match="max_tokens"):
+        ExecutionBudget(max_tokens=1.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="max_money"):
+        ExecutionBudget(max_money=float("nan"))
+
+
+def test_money_budget_is_reserved_before_running_a_tool() -> None:
+    plan = Plan(plan_id="money", steps=[PlanStep(id="one", tool="echo", inputs={"text": "x"})])
+    state = execute_plan(plan, build_default_registry(), budget=ExecutionBudget(max_money=0.005))
+    assert state.terminated and state.steps_done == 0
+    assert state.termination_reason == "budget exceeded"
+    assert state.money_spent == 0.0
