@@ -211,6 +211,27 @@ class ToolRegistry:
     def has_tool(self, name: str) -> bool:
         return name in self._tools
 
+    def preflight(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        granted_capabilities: set[str] | None = None,
+    ) -> list[str]:
+        """Validate a prospective call without invoking its handler."""
+        registered = self._tools.get(name)
+        if registered is None:
+            return [f"tool not found: {name}"]
+        spec, _ = registered
+        errors = spec.validate_arguments(arguments)
+        missing = spec.capability_tags - (granted_capabilities or set())
+        if missing:
+            errors.append("missing capabilities: " + ", ".join(sorted(missing)))
+        if spec.side_effect_class in {"write", "mutate"} and not idempotency_key:
+            errors.append("side-effecting tool requires an idempotency key")
+        return errors
+
     def execute(
         self,
         name: str,
