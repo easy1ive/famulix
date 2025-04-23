@@ -78,6 +78,18 @@ def execute_plan(
         state.termination_reason = f"invalid plan: {'; '.join(validation.errors)}"
         return state
 
+    for step in plan.steps:
+        errors = registry.preflight(
+            step.tool,
+            step.inputs,
+            idempotency_key=step.id,
+            granted_capabilities=granted_capabilities,
+        )
+        if errors:
+            state.terminated = True
+            state.termination_reason = f"tool preflight failed for {step.id}: {'; '.join(errors)}"
+            return state
+
     # Get execution order
     order = topological_order(plan)
     step_map = {s.id: s for s in plan.steps}
