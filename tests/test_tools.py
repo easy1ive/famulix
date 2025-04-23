@@ -318,3 +318,28 @@ def test_tool_spec_rejects_malformed_schemas() -> None:
             description="bad",
             parameters={"type": "object", "properties": {"x": {"type": "record"}}},
         )
+
+
+def test_preflight_validates_without_calling_handler() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    calls: list[str] = []
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="private",
+            description="private",
+            parameters={
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+            capability_tags=frozenset({"private.read"}),
+        ),
+        lambda text: calls.append(text),
+    )
+    errors = registry.preflight("private", {})
+    assert any("missing required field" in error for error in errors)
+    assert any("missing capabilities" in error for error in errors)
+    assert calls == []
+    assert registry.preflight("unknown", {}) == ["tool not found: unknown"]
