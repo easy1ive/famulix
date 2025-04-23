@@ -7,6 +7,7 @@ scenarios for property testing.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,6 +22,14 @@ class ExecutionBudget:
     max_steps: int = 100
     max_tokens: int = 4096
     max_money: float = 100.0
+
+    def __post_init__(self) -> None:
+        if type(self.max_steps) is not int or self.max_steps < 0:
+            raise ValueError("max_steps must be a non-negative integer")
+        if type(self.max_tokens) is not int or self.max_tokens < 0:
+            raise ValueError("max_tokens must be a non-negative integer")
+        if not math.isfinite(self.max_money) or self.max_money < 0:
+            raise ValueError("max_money must be finite and non-negative")
 
 
 @dataclass
@@ -50,7 +59,7 @@ class ExecutionState:
         return (
             self.steps_done < budget.max_steps
             and self.tokens_used < budget.max_tokens
-            and self.money_spent < budget.max_money
+            and self.money_spent + 0.01 <= budget.max_money
         )
 
 
@@ -141,7 +150,7 @@ def execute_plan(
                 state.outputs[step.id] = result.output
 
         # Money cost: 0.01 per step by default
-        state.money_spent += 0.01
+        state.money_spent = round(state.money_spent + 0.01, 6)
         if not result.success:
             state.terminated = True
             state.termination_reason = f"tool failed: {step.id}"
