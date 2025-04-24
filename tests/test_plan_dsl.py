@@ -185,3 +185,17 @@ def test_plan_json_roundtrip_has_versioned_golden_shape() -> None:
     )
     assert payload == expected
     assert Plan.from_json(payload).to_json() == payload
+
+
+def test_plan_decoder_rejects_unsupported_and_malformed_payloads() -> None:
+    import pytest
+
+    plan = Plan(plan_id="p", steps=[PlanStep(id="s", tool="echo")])
+    payload = plan.to_dict()
+    with pytest.raises(ValueError, match="schema version"):
+        Plan.from_dict({**payload, "schema_version": 2})
+    with pytest.raises(ValueError, match="unknown or missing"):
+        Plan.from_dict({**payload, "extra": True})
+    bad = {**payload, "steps": [{"id": "s"}]}
+    with pytest.raises(ValueError, match="unknown or missing"):
+        Plan.from_dict(bad)
