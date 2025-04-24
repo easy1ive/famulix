@@ -68,7 +68,7 @@ class Plan:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Plan:
         """Decode a versioned plan payload with strict record shapes."""
-        if data.get("schema_version") != 1:
+        if not isinstance(data, dict) or data.get("schema_version") != 1:
             raise ValueError("unsupported plan schema version")
         if set(data) != {"schema_version", "plan_id", "version", "steps", "metadata"}:
             raise ValueError("plan payload has unknown or missing fields")
