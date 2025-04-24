@@ -172,3 +172,16 @@ def test_plan_get_step() -> None:
     )
     assert plan.get_step("s1").tool == "echo"
     assert plan.get_step("missing") is None
+
+
+def test_plan_json_roundtrip_has_versioned_golden_shape() -> None:
+    plan = Plan(plan_id="daily", steps=[PlanStep(id="read", tool="echo", inputs={"text": "hi"})])
+    payload = plan.to_json()
+    expected = (
+        '{"metadata":{},"plan_id":"daily","schema_version":1,'
+        '"steps":[{"budget":0.0,"depends_on":[],"effects":[],"id":"read",'
+        '"inputs":{"text":"hi"},"preconditions":[],"timeout_s":5.0,"tool":"echo"}],'
+        '"version":1}'
+    )
+    assert payload == expected
+    assert Plan.from_json(payload).to_json() == payload

@@ -7,6 +7,7 @@ mismatches. The planner produces a topological execution order.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -57,11 +58,78 @@ class Plan:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schema_version": 1,
             "plan_id": self.plan_id,
             "version": self.version,
             "steps": [s.to_dict() for s in self.steps],
             "metadata": self.metadata,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Plan:
+        """Decode a versioned plan payload with strict record shapes."""
+        if data.get("schema_version") != 1:
+            raise ValueError("unsupported plan schema version")
+        if set(data) != {"schema_version", "plan_id", "version", "steps", "metadata"}:
+            raise ValueError("plan payload has unknown or missing fields")
+        if not isinstance(data["plan_id"], str) or type(data["version"]) is not int:
+            raise ValueError("plan identity and version have invalid types")
+        if not isinstance(data["steps"], list) or not isinstance(data["metadata"], dict):
+            raise ValueError("plan steps and metadata have invalid types")
+        if any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in data["metadata"].items()
+        ):
+            raise ValueError("plan metadata values must be strings")
+        fields = {
+            "id",
+            "tool",
+            "inputs",
+            "depends_on",
+            "preconditions",
+            "effects",
+            "timeout_s",
+            "budget",
+        }
+        steps: list[PlanStep] = []
+        for raw in data["steps"]:
+            if not isinstance(raw, dict) or set(raw) != fields:
+                raise ValueError("plan step has unknown or missing fields")
+            if not isinstance(raw["id"], str) or not isinstance(raw["tool"], str):
+                raise ValueError("plan step identity fields must be strings")
+            if not isinstance(raw["inputs"], dict):
+                raise ValueError("plan step inputs must be an object")
+            for name in ("depends_on", "preconditions", "effects"):
+                if not isinstance(raw[name], list) or any(
+                    not isinstance(item, str) for item in raw[name]
+                ):
+                    raise ValueError(f"plan step {name} must be a list of strings")
+            if type(raw["timeout_s"]) not in (int, float) or type(raw["budget"]) not in (
+                int,
+                float,
+            ):
+                raise ValueError("plan step numeric limits must be numbers")
+            steps.append(PlanStep(**raw))
+        return cls(
+            plan_id=data["plan_id"],
+            version=data["version"],
+            steps=steps,
+            metadata=dict(data["metadata"]),
+        )
+
+    def to_json(self) -> str:
+        """Serialize the plan as compact, deterministic JSON."""
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, payload: str) -> Plan:
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid plan JSON") from exc
+        if not isinstance(data, dict):
+            raise ValueError("plan JSON must contain an object")
+        return cls.from_dict(data)
 
 
 @dataclass
