@@ -241,3 +241,10 @@ def test_money_budget_is_reserved_before_running_a_tool() -> None:
     assert state.terminated and state.steps_done == 0
     assert state.termination_reason == "budget exceeded"
     assert state.money_spent == 0.0
+
+
+def test_execution_state_snapshot_is_canonical() -> None:
+    plan = Plan(plan_id="snapshot", steps=[PlanStep(id="s", tool="echo", inputs={"text": "ok"})])
+    state = execute_plan(plan, build_default_registry())
+    assert state.to_json() == state.to_json()
+    assert state.to_dict()["schema_version"] == 1
