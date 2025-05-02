@@ -81,6 +81,57 @@ class ExecutionState:
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ExecutionState:
+        """Decode a strict execution snapshot."""
+        required = {
+            "schema_version",
+            "steps_done",
+            "tokens_used",
+            "money_spent",
+            "outputs",
+            "history",
+            "facts",
+            "terminated",
+            "termination_reason",
+        }
+        if set(data) != required or data.get("schema_version") != 1:
+            raise ValueError("unsupported or malformed execution state")
+        if type(data["steps_done"]) is not int or type(data["tokens_used"]) is not int:
+            raise ValueError("execution counters must be integers")
+        if (
+            type(data["terminated"]) is not bool
+            or not isinstance(data["outputs"], dict)
+            or not isinstance(data["facts"], list)
+        ):
+            raise ValueError("invalid execution state fields")
+        history: list[StepExecution] = []
+        for raw in data["history"]:
+            if not isinstance(raw, dict) or set(raw) != {"step_id", "success", "result", "error"}:
+                raise ValueError("malformed execution history")
+            result = ToolResult.from_dict(raw["result"]) if raw["result"] is not None else None
+            history.append(StepExecution(raw["step_id"], raw["success"], result, raw["error"]))
+        return cls(
+            steps_done=data["steps_done"],
+            tokens_used=data["tokens_used"],
+            money_spent=float(data["money_spent"]),
+            outputs=dict(data["outputs"]),
+            history=history,
+            facts=set(data["facts"]),
+            terminated=data["terminated"],
+            termination_reason=data["termination_reason"],
+        )
+
+    @classmethod
+    def from_json(cls, payload: str) -> ExecutionState:
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid execution state JSON") from exc
+        if not isinstance(data, dict):
+            raise ValueError("execution state JSON must contain an object")
+        return cls.from_dict(data)
+
     def within_budget(self, budget: ExecutionBudget) -> bool:
         return (
             self.steps_done < budget.max_steps
