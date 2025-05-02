@@ -218,3 +218,12 @@ def test_plan_validation_rejects_non_finite_step_limits() -> None:
     result = validate_plan(plan)
     assert not result.valid
     assert any("timeout" in error for error in result.errors)
+
+
+def test_plan_fingerprint_changes_with_content_and_survives_roundtrip() -> None:
+    from famulix.plan_dsl import Plan, PlanStep
+
+    first = Plan(plan_id="digest", steps=[PlanStep(id="s", tool="echo", inputs={"text": "a"})])
+    changed = Plan(plan_id="digest", steps=[PlanStep(id="s", tool="echo", inputs={"text": "b"})])
+    assert first.fingerprint() == Plan.from_json(first.to_json()).fingerprint()
+    assert first.fingerprint() != changed.fingerprint()
