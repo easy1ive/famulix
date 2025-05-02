@@ -248,3 +248,23 @@ def test_execution_state_snapshot_is_canonical() -> None:
     state = execute_plan(plan, build_default_registry())
     assert state.to_json() == state.to_json()
     assert state.to_dict()["schema_version"] == 1
+
+
+def test_execution_state_roundtrip_restores_receipts_and_facts() -> None:
+    plan = Plan(
+        plan_id="restore",
+        steps=[PlanStep(id="s", tool="echo", inputs={"text": "ok"}, effects=["ready"])],
+    )
+    state = execute_plan(plan, build_default_registry())
+    restored = type(state).from_json(state.to_json())
+    assert restored.to_json() == state.to_json()
+    assert restored.facts == {"ready"}
+
+
+def test_execution_state_decoder_rejects_unknown_fields() -> None:
+    import pytest
+
+    from famulix.executor import ExecutionState
+
+    with pytest.raises(ValueError, match="malformed"):
+        ExecutionState.from_dict({"schema_version": 1, "extra": True})
