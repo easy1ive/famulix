@@ -199,3 +199,22 @@ def test_plan_decoder_rejects_unsupported_and_malformed_payloads() -> None:
     bad = {**payload, "steps": [{"id": "s"}]}
     with pytest.raises(ValueError, match="unknown or missing"):
         Plan.from_dict(bad)
+
+
+def test_plan_validation_rejects_invalid_identity_limits_and_duplicate_edges() -> None:
+    plan = Plan(
+        plan_id="", version=0, steps=[PlanStep(id="s", tool="", depends_on=["s", "s"], timeout_s=0)]
+    )
+    result = validate_plan(plan)
+    assert not result.valid
+    assert any("plan id" in error for error in result.errors)
+    assert any("version" in error for error in result.errors)
+    assert any("duplicate dependencies" in error for error in result.errors)
+    assert any("timeout" in error for error in result.errors)
+
+
+def test_plan_validation_rejects_non_finite_step_limits() -> None:
+    plan = Plan(plan_id="finite", steps=[PlanStep(id="s", tool="echo", timeout_s=float("nan"))])
+    result = validate_plan(plan)
+    assert not result.valid
+    assert any("timeout" in error for error in result.errors)
