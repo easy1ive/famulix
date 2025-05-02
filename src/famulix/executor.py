@@ -7,6 +7,7 @@ scenarios for property testing.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
 from typing import Any
@@ -54,6 +55,31 @@ class ExecutionState:
     facts: set[str] = field(default_factory=set)
     terminated: bool = False
     termination_reason: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize an execution state without callable registry data."""
+        return {
+            "schema_version": 1,
+            "steps_done": self.steps_done,
+            "tokens_used": self.tokens_used,
+            "money_spent": round(self.money_spent, 6),
+            "outputs": self.outputs,
+            "history": [
+                {
+                    "step_id": item.step_id,
+                    "success": item.success,
+                    "result": item.result.to_dict() if item.result else None,
+                    "error": item.error,
+                }
+                for item in self.history
+            ],
+            "facts": sorted(self.facts),
+            "terminated": self.terminated,
+            "termination_reason": self.termination_reason,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
     def within_budget(self, budget: ExecutionBudget) -> bool:
         return (
