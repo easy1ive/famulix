@@ -8,6 +8,7 @@ mismatches. The planner produces a topological execution order.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -154,11 +155,31 @@ def validate_plan(plan: Plan) -> ValidationResult:
     warnings: list[str] = []
     ids = plan.step_ids()
 
+    if not plan.plan_id.strip():
+        errors.append("plan id must not be empty")
+    if type(plan.version) is not int or plan.version < 1:
+        errors.append("plan version must be a positive integer")
     if len(ids) != len(plan.steps):
         errors.append("duplicate step ids found")
 
     # Dangling references
     for step in plan.steps:
+        if not step.id.strip() or not step.tool.strip():
+            errors.append("step id and tool name must not be empty")
+        if len(step.depends_on) != len(set(step.depends_on)):
+            errors.append(f"step {step.id}: duplicate dependencies found")
+        if (
+            type(step.timeout_s) not in (int, float)
+            or not math.isfinite(step.timeout_s)
+            or step.timeout_s <= 0
+        ):
+            errors.append(f"step {step.id}: timeout must be positive")
+        if (
+            type(step.budget) not in (int, float)
+            or not math.isfinite(step.budget)
+            or step.budget < 0
+        ):
+            errors.append(f"step {step.id}: budget must be non-negative")
         for dep in step.depends_on:
             if dep not in ids:
                 errors.append(f"step {step.id}: dangling dependency '{dep}'")
