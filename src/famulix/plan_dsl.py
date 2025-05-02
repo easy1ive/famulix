@@ -7,6 +7,7 @@ mismatches. The planner produces a topological execution order.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import dataclass, field
@@ -117,6 +118,10 @@ class Plan:
             steps=steps,
             metadata=dict(data["metadata"]),
         )
+
+    def fingerprint(self) -> str:
+        """Return a stable content digest for this versioned plan."""
+        return hashlib.sha256(self.to_json().encode("utf-8")).hexdigest()
 
     def to_json(self) -> str:
         """Serialize the plan as compact, deterministic JSON."""
