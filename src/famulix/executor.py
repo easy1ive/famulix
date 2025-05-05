@@ -192,6 +192,19 @@ def execute_plan(
         if step is None:
             continue
 
+        missing_dependencies = [
+            dependency
+            for dependency in step.depends_on
+            if not any(item.step_id == dependency and item.success for item in state.history)
+        ]
+        if missing_dependencies:
+            message = "failed dependencies: " + ", ".join(sorted(missing_dependencies))
+            state.history.append(StepExecution(step_id=step.id, success=False, error=message))
+            state.steps_done += 1
+            state.terminated = True
+            state.termination_reason = message
+            break
+
         missing_facts = sorted(set(step.preconditions) - state.facts)
         if missing_facts:
             message = "unsatisfied preconditions: " + ", ".join(missing_facts)

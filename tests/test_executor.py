@@ -277,3 +277,31 @@ def test_declared_step_cost_is_reflected_in_money_usage() -> None:
     state = execute_plan(plan, build_default_registry(), budget=ExecutionBudget(max_money=3))
     assert not state.terminated
     assert state.money_spent == 2.5
+
+
+def test_dependency_failure_is_recorded_before_dependent_action() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    calls: list[str] = []
+    registry = ToolRegistry()
+
+    def fail() -> None:
+        raise RuntimeError("no")
+
+    registry.register(
+        ToolSpec(name="fail", description="fail", parameters={"type": "object"}), fail
+    )
+    registry.register(
+        ToolSpec(name="record", description="record", parameters={"type": "object"}),
+        lambda: calls.append("ran"),
+    )
+    plan = Plan(
+        plan_id="deps",
+        steps=[
+            PlanStep(id="bad", tool="fail"),
+            PlanStep(id="later", tool="record", depends_on=["bad"]),
+        ],
+    )
+    state = execute_plan(plan, registry)
+    assert [item.step_id for item in state.history] == ["bad"]
+    assert calls == []
