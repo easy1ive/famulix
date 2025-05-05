@@ -268,3 +268,12 @@ def test_execution_state_decoder_rejects_unknown_fields() -> None:
 
     with pytest.raises(ValueError, match="malformed"):
         ExecutionState.from_dict({"schema_version": 1, "extra": True})
+
+
+def test_declared_step_cost_is_reflected_in_money_usage() -> None:
+    plan = Plan(
+        plan_id="cost", steps=[PlanStep(id="s", tool="echo", inputs={"text": "ok"}, budget=2.5)]
+    )
+    state = execute_plan(plan, build_default_registry(), budget=ExecutionBudget(max_money=3))
+    assert not state.terminated
+    assert state.money_spent == 2.5
