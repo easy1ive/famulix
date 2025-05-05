@@ -226,8 +226,8 @@ def execute_plan(
                 state.tokens_used += len(str(result.output)) // 4
                 state.outputs[step.id] = result.output
 
-        # Money cost: 0.01 per step by default
-        state.money_spent = round(state.money_spent + 0.01, 6)
+        # Declared step budgets are synthetic money costs.
+        state.money_spent = round(state.money_spent + max(step.budget, 0.01), 6)
         if not result.success:
             state.terminated = True
             state.termination_reason = f"tool failed: {step.id}"
