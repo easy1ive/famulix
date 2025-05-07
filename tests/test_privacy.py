@@ -330,3 +330,12 @@ def test_piimatch_dataclass() -> None:
     assert m.pii_type == "email"
     assert m.start == 0
     assert m.end == 5
+
+
+def test_access_log_jsonl_roundtrip_is_stable() -> None:
+    from famulix.privacy import AccessLog
+
+    log = AccessLog()
+    log.record(actor="app", action="read", resource="memory", result="allowed", timestamp_s=3)
+    payload = log.to_jsonl()
+    assert AccessLog.from_jsonl(payload).to_jsonl() == payload

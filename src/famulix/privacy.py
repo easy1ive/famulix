@@ -9,6 +9,7 @@ engine with precedence and conflict diagnostics.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -178,6 +179,31 @@ class AccessLog:
                 "timestamp_s": timestamp_s,
             }
         )
+
+    def to_jsonl(self) -> str:
+        """Serialize audit entries in stable JSONL order."""
+        return "\n".join(
+            json.dumps(dict(entry), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            for entry in self._entries
+        )
+
+    @classmethod
+    def from_jsonl(cls, payload: str) -> AccessLog:
+        log = cls()
+        for number, line in enumerate(payload.splitlines(), start=1):
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"invalid access log JSON at line {number}") from exc
+            required = {"actor", "action", "resource", "result", "timestamp_s"}
+            if not isinstance(entry, dict) or set(entry) != required:
+                raise ValueError(f"malformed access log entry at line {number}")
+            if not all(isinstance(entry[key], str) for key in required - {"timestamp_s"}):
+                raise ValueError(f"invalid access log text at line {number}")
+            if type(entry["timestamp_s"]) is not int:
+                raise ValueError(f"invalid access log timestamp at line {number}")
+            log._entries.append(dict(entry))
+        return log
 
     def count_by_result(self, result: str) -> int:
         return sum(1 for e in self.entries if e["result"] == result)
