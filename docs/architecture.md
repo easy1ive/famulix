@@ -23,3 +23,12 @@ These works motivate mechanisms; famulix provides its own data model and impleme
 ## Daily briefing visuals
 
 The briefing charts aggregate active graph nodes by their stored creation time in the configured UTC+8 view. The day ribbon sums salience by local hour; the heatmap shows the latest seven represented local dates, with each cell summing the same node scores. Empty histories omit the heatmap. These visuals summarize the synthetic or user-provided graph supplied to the offline pipeline; they are not measurements of assistant quality.
+
+## Plan execution snapshots
+
+Plans carry a versioned JSON schema and a content fingerprint. Execution state
+can be serialized as a strict version-one snapshot containing outputs, facts,
+step receipts, counters, and the termination reason. The snapshot deliberately
+contains no tool handlers; resuming therefore requires the caller to provide a
+registry again. Declared step budgets are synthetic money costs, while the
+run-level budget reserves the base receipt cost before each action.
