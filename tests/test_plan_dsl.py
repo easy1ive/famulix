@@ -227,3 +227,10 @@ def test_plan_fingerprint_changes_with_content_and_survives_roundtrip() -> None:
     changed = Plan(plan_id="digest", steps=[PlanStep(id="s", tool="echo", inputs={"text": "b"})])
     assert first.fingerprint() == Plan.from_json(first.to_json()).fingerprint()
     assert first.fingerprint() != changed.fingerprint()
+
+
+def test_plan_json_rejects_non_object_payload() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="object"):
+        Plan.from_json("[]")
