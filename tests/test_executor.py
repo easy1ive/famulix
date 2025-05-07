@@ -305,3 +305,12 @@ def test_dependency_failure_is_recorded_before_dependent_action() -> None:
     state = execute_plan(plan, registry)
     assert [item.step_id for item in state.history] == ["bad"]
     assert calls == []
+
+
+def test_execution_state_json_rejects_non_object_payload() -> None:
+    import pytest
+
+    from famulix.executor import ExecutionState
+
+    with pytest.raises(ValueError, match="object"):
+        ExecutionState.from_json("[]")
