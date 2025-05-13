@@ -339,3 +339,14 @@ def test_access_log_jsonl_roundtrip_is_stable() -> None:
     log.record(actor="app", action="read", resource="memory", result="allowed", timestamp_s=3)
     payload = log.to_jsonl()
     assert AccessLog.from_jsonl(payload).to_jsonl() == payload
+
+
+def test_access_decision_roundtrip_rejects_shape_drift() -> None:
+    import pytest
+
+    from famulix.privacy import AccessDecision
+
+    decision = AccessDecision(True, "allow", "matched")
+    assert AccessDecision.from_dict(decision.to_dict()) == decision
+    with pytest.raises(ValueError, match="malformed"):
+        AccessDecision.from_dict({"allowed": True})
