@@ -220,6 +220,27 @@ class AccessDecision:
     effect: PolicyEffect
     reason: str
 
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> AccessDecision:
+        if set(data) != {"allowed", "effect", "reason"}:
+            raise ValueError("malformed access decision")
+        if (
+            type(data["allowed"]) is not bool
+            or data["effect"] not in {"allow", "deny", "ask"}
+            or not isinstance(data["reason"], str)
+        ):
+            raise ValueError("invalid access decision fields")
+        return cls(data["allowed"], data["effect"], data["reason"])
+
+    def to_dict(self) -> dict[str, object]:
+        return {"allowed": self.allowed, "effect": self.effect, "reason": self.reason}
+
+    """Audited result of a privacy-tier access request."""
+
+    allowed: bool
+    effect: PolicyEffect
+    reason: str
+
 
 class PrivacyGate:
     """Combine policy evaluation with monotonic privacy-tier enforcement."""
