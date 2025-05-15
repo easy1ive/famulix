@@ -384,3 +384,14 @@ def test_redaction_does_not_duplicate_overlapping_matches() -> None:
     text, mapping = redact_text("mail me at 12345678901@example.com")
     assert text.count("[EMAIL]") == 1
     assert len(mapping) == 0
+
+
+def test_access_log_decoder_rejects_unknown_fields() -> None:
+    import pytest
+
+    from famulix.privacy import AccessLog
+
+    with pytest.raises(ValueError, match="malformed"):
+        AccessLog.from_jsonl(
+            '{"actor":"a","action":"r","resource":"m","result":"allowed","timestamp_s":1,"extra":0}'
+        )
