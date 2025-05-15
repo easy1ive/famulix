@@ -364,3 +364,15 @@ def test_policy_engine_rejects_duplicate_and_empty_rule_ids() -> None:
         engine.add_rule(rule)
     with pytest.raises(ValueError, match="id"):
         engine.add_rule(PolicyRule("", "deny", set(), set(), set()))
+
+
+def test_policy_precedence_is_independent_of_insertion_order() -> None:
+    from famulix.privacy import PolicyEngine, PolicyRule
+
+    engine = PolicyEngine()
+    engine.add_rule(PolicyRule("z-deny", "deny", {"read"}, {"memory"}, {"personal"}, 4))
+    engine.add_rule(PolicyRule("a-allow", "allow", {"read"}, {"memory"}, {"personal"}, 4))
+    assert engine.evaluate(action="read", resource="memory", tier="personal") == (
+        "allow",
+        "a-allow",
+    )
