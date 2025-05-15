@@ -376,3 +376,11 @@ def test_policy_precedence_is_independent_of_insertion_order() -> None:
         "allow",
         "a-allow",
     )
+
+
+def test_redaction_does_not_duplicate_overlapping_matches() -> None:
+    from famulix.privacy import redact_text
+
+    text, mapping = redact_text("mail me at 12345678901@example.com")
+    assert text.count("[EMAIL]") == 1
+    assert len(mapping) == 0
