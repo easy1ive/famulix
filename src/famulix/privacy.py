@@ -115,6 +115,8 @@ def redact_text(
     counter = 0
 
     for match in matches:
+        if match.start < last:
+            continue
         result_parts.append(text[last : match.start])
         if mode == "irreversible":
             token = f"[{match.pii_type.upper()}]"
