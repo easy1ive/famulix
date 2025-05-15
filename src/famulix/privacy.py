@@ -316,8 +316,22 @@ class PolicyEngine:
         self.default_effect = default_effect
 
     def add_rule(self, rule: PolicyRule) -> None:
+        if not rule.id.strip():
+            raise ValueError("policy rule id must not be empty")
+        if rule.effect not in {"allow", "deny", "ask"}:
+            raise ValueError("policy rule effect is invalid")
+        if type(rule.priority) is not int:
+            raise ValueError("policy rule priority must be an integer")
+        if any(
+            not isinstance(value, str) or not value
+            for values in (rule.actions, rule.resources, rule.tiers)
+            for value in values
+        ):
+            raise ValueError("policy rule match values must be non-empty strings")
+        if any(existing.id == rule.id for existing in self._rules):
+            raise ValueError(f"duplicate policy rule id: {rule.id}")
         self._rules.append(rule)
-        self._rules.sort(key=lambda r: r.priority, reverse=True)
+        self._rules.sort(key=lambda r: (-r.priority, r.id))
 
     def evaluate(
         self,

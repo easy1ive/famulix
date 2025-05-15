@@ -350,3 +350,17 @@ def test_access_decision_roundtrip_rejects_shape_drift() -> None:
     assert AccessDecision.from_dict(decision.to_dict()) == decision
     with pytest.raises(ValueError, match="malformed"):
         AccessDecision.from_dict({"allowed": True})
+
+
+def test_policy_engine_rejects_duplicate_and_empty_rule_ids() -> None:
+    import pytest
+
+    from famulix.privacy import PolicyEngine, PolicyRule
+
+    engine = PolicyEngine()
+    rule = PolicyRule("read", "allow", {"read"}, {"memory"}, {"personal"})
+    engine.add_rule(rule)
+    with pytest.raises(ValueError, match="duplicate"):
+        engine.add_rule(rule)
+    with pytest.raises(ValueError, match="id"):
+        engine.add_rule(PolicyRule("", "deny", set(), set(), set()))
