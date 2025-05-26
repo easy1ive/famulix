@@ -205,3 +205,15 @@ def test_session_loader_rejects_extra_frame_fields(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="unknown or missing"):
         SessionRecorder.load(path)
+
+
+def test_session_diff_reports_first_changed_frame() -> None:
+    from famulix.session import SessionRecorder, session_diff
+
+    left = SessionRecorder("x")
+    right = SessionRecorder("x")
+    left.record("a", {"value": 1}, 0)
+    right.record("a", {"value": 2}, 0)
+    result = session_diff(left, right)
+    assert result["identical"] is False
+    assert result["first_difference"] == 0

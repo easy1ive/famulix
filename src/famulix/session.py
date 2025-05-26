@@ -168,4 +168,12 @@ def session_diff(a: SessionRecorder, b: SessionRecorder) -> dict[str, Any]:
         "a_length": len(a.entries),
         "b_length": len(b.entries),
         "length_diff": len(a.entries) - len(b.entries),
+        "first_difference": next(
+            (
+                index
+                for index, (left, right) in enumerate(zip(a.entries, b.entries, strict=False))
+                if left != right
+            ),
+            min(len(a.entries), len(b.entries)) if len(a.entries) != len(b.entries) else None,
+        ),
     }
