@@ -98,9 +98,19 @@ class SessionRecorder:
             if not isinstance(entry, dict):
                 raise ValueError(f"session frame at line {line_number} must be an object")
             required = {"session_id", "seq", "kind", "timestamp_s", "payload", "seed", "_hash"}
+            if set(entry) != required:
+                raise ValueError(
+                    f"session frame at line {line_number} has unknown or missing fields"
+                )
             if not required.issubset(entry):
                 missing = ", ".join(sorted(required - entry.keys()))
                 raise ValueError(f"session frame at line {line_number} is missing: {missing}")
+            if (
+                type(entry["seq"]) is not int
+                or type(entry["timestamp_s"]) is not int
+                or not isinstance(entry["kind"], str)
+            ):
+                raise ValueError(f"invalid session frame fields at line {line_number}")
             if entry["seq"] != len(rec.entries):
                 raise ValueError(f"session sequence mismatch at line {line_number}")
             rec.entries.append(entry)

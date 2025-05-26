@@ -178,3 +178,30 @@ def test_session_checkpoint_resumes_only_matching_trace() -> None:
     recorder.record("brief", {"id": "b1"}, 11)
     with pytest.raises(ValueError, match="stale"):
         SessionRecorder.resume_from(checkpoint, recorder)
+
+
+def test_session_loader_rejects_extra_frame_fields(tmp_path) -> None:
+    import json
+
+    import pytest
+
+    from famulix.session import SessionRecorder
+
+    path = tmp_path / "session.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "session_id": "x",
+                "seq": 0,
+                "kind": "k",
+                "timestamp_s": 0,
+                "payload": {},
+                "seed": 0,
+                "_hash": "x",
+                "extra": 1,
+            }
+        )
+        + "\n"
+    )
+    with pytest.raises(ValueError, match="unknown or missing"):
+        SessionRecorder.load(path)
