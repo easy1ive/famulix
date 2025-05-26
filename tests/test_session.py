@@ -164,3 +164,17 @@ def test_multiple_entry_order() -> None:
     rec.record("c", {}, 300)
     assert [e["kind"] for e in rec.entries] == ["a", "b", "c"]
     assert [e["seq"] for e in rec.entries] == [0, 1, 2]
+
+
+def test_session_checkpoint_resumes_only_matching_trace() -> None:
+    import pytest
+
+    from famulix.session import SessionRecorder
+
+    recorder = SessionRecorder("daily", seed=4)
+    recorder.record("recall", {"id": "m1"}, 10)
+    checkpoint = recorder.checkpoint()
+    assert SessionRecorder.resume_from(checkpoint, recorder) is recorder
+    recorder.record("brief", {"id": "b1"}, 11)
+    with pytest.raises(ValueError, match="stale"):
+        SessionRecorder.resume_from(checkpoint, recorder)
