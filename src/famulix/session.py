@@ -116,6 +116,33 @@ class SessionRecorder:
                 raise ValueError("session frame checksum verification failed")
         return rec
 
+    def checkpoint(self) -> dict[str, object]:
+        """Return a resumable cursor over the verified trace."""
+        if not self.verify():
+            raise ValueError("cannot checkpoint an invalid session")
+        return {
+            "session_id": self.session_id,
+            "seed": self.seed,
+            "next_seq": len(self.entries),
+            "digest": self.digest(),
+        }
+
+    @classmethod
+    def resume_from(cls, checkpoint: dict[str, object], source: SessionRecorder) -> SessionRecorder:
+        required = {"session_id", "seed", "next_seq", "digest"}
+        if (
+            set(checkpoint) != required
+            or checkpoint.get("session_id") != source.session_id
+            or checkpoint.get("seed") != source.seed
+        ):
+            raise ValueError("checkpoint does not match session")
+        if (
+            checkpoint.get("next_seq") != len(source.entries)
+            or checkpoint.get("digest") != source.digest()
+        ):
+            raise ValueError("checkpoint cursor is stale")
+        return source
+
     def digest(self) -> str:
         """Return a hash of the entire session for diff/comparison."""
         text = self.to_jsonl()
