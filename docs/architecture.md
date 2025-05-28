@@ -32,3 +32,11 @@ step receipts, counters, and the termination reason. The snapshot deliberately
 contains no tool handlers; resuming therefore requires the caller to provide a
 registry again. Declared step budgets are synthetic money costs, while the
 run-level budget reserves the base receipt cost before each action.
+
+## Privacy and replay artifacts
+
+Privacy access logs are append-only JSONL with strict frame fields, and access
+decisions have a small round-trippable shape for audit reports. Policy rules
+are ordered by explicit priority and then rule id. Session checkpoints bind a
+cursor to the session id, seed, length, and digest; a stale checkpoint cannot
+resume a changed trace. Session diffs report the first divergent frame.
