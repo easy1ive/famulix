@@ -142,3 +142,24 @@ def test_svg_commitment_timeline_empty_returns_tiny_svg() -> None:
     from famulix.reports import svg_commitment_timeline
 
     assert svg_commitment_timeline([]) == "<svg/>"
+
+
+def test_memory_timeline_sorts_by_created_at() -> None:
+    from famulix.reports import memory_timeline_markdown
+
+    nodes = [
+        {"title": "later", "created_at_s": 200, "kind": "fact", "body": "b"},
+        {"title": "earlier", "created_at_s": 100, "kind": "fact", "body": "a"},
+    ]
+    md = memory_timeline_markdown(nodes)
+    assert md.index("earlier") < md.index("later")
+
+
+def test_memory_timeline_escapes_md_special_chars() -> None:
+    from famulix.reports import memory_timeline_markdown
+
+    nodes = [{"title": "x*_test", "created_at_s": 1, "kind": "fact", "body": "a*b_c"}]
+    md = memory_timeline_markdown(nodes)
+    # escape_md backslash-escapes * and _
+    assert "\\*" in md
+    assert "\\_" in md
