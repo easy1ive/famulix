@@ -198,6 +198,46 @@ def svg_heatmap(
     return svg
 
 
+def svg_commitment_timeline(
+    items: list[tuple[str, float, float]],
+    *,
+    width: int = 600,
+    height: int = 120,
+) -> str:
+    """Render an SVG commitment timeline.
+
+    items is a list of (label, start_day, duration_days). Day 0 is leftmost.
+    """
+    if not items:
+        return "<svg/>"
+    max_day = max(start + dur for _, start, dur in items) or 1.0
+    row_h = 22
+    pad_left = 120
+    pad_right = 20
+    plot_w = width - pad_left - pad_right
+    bars: list[str] = []
+    labels: list[str] = []
+    for i, (label, start, dur) in enumerate(items):
+        y = i * row_h + 10
+        x = pad_left + (start / max_day) * plot_w
+        w = max((dur / max_day) * plot_w, 2)
+        bars.append(
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="14" fill="#4a90d9" rx="3"/>'
+        )
+        labels.append(
+            f'<text x="{pad_left - 6}" y="{y + 11:.1f}" text-anchor="end" '
+            f'font-size="11" fill="#333">{escape_html(label[:24])}</text>'
+        )
+    total_h = max(len(items) * row_h + 20, height)
+    svg = f"""<svg viewBox="0 0 {width} {total_h}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="{width}" height="{total_h}" fill="#fafafa"/>
+  <line x1="{pad_left}" y1="5" x2="{pad_left}" y2="{total_h - 5}" stroke="#ddd"/>
+  {"".join(bars)}
+  {"".join(labels)}
+</svg>"""
+    return svg
+
+
 def run_metadata(
     *,
     version: str,
