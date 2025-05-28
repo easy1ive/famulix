@@ -256,6 +256,25 @@ def run_metadata(
     return meta
 
 
+def memory_timeline_markdown(
+    nodes: list[dict[str, object]],
+    *,
+    title: str = "Memory Timeline",
+) -> str:
+    """Render a simple Markdown timeline from node dicts sorted by created_at."""
+    sorted_nodes = sorted(nodes, key=lambda n: int(n.get("created_at_s", 0)))
+    sections: list[ReportSection] = []
+    items: list[tuple[str, str]] = []
+    for n in sorted_nodes:
+        label = str(n.get("title", "(untitled)"))
+        ts = int(n.get("created_at_s", 0))
+        kind = str(n.get("kind", "?"))
+        value = f"[{kind}] t={ts} — {n.get('body', '')}"
+        items.append((label, value))
+    sections.append(ReportSection(title="timeline", items=items))
+    return render_markdown(title, sections)
+
+
 def json_escape(data: object) -> str:
     """Deterministic JSON serialization for embedded data."""
     return json.dumps(data, sort_keys=True, ensure_ascii=False)
