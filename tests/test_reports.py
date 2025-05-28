@@ -126,3 +126,19 @@ def test_heatmap_rejects_ragged_or_invalid_data() -> None:
         svg_heatmap([[float("nan")]])
     with pytest.raises(ValueError, match="cell_size"):
         svg_heatmap([[1.0]], cell_size=0)
+
+
+def test_svg_commitment_timeline_renders_bars_for_each_item() -> None:
+    from famulix.reports import svg_commitment_timeline
+
+    items = [("report", 3.0, 7.0), ("gym plan", 0.0, 30.0)]
+    svg = svg_commitment_timeline(items)
+    assert svg.count("<rect") == 2 + 1  # bars + background
+    assert "report" in svg
+    assert "gym plan" in svg
+
+
+def test_svg_commitment_timeline_empty_returns_tiny_svg() -> None:
+    from famulix.reports import svg_commitment_timeline
+
+    assert svg_commitment_timeline([]) == "<svg/>"
