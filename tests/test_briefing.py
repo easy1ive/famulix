@@ -284,3 +284,50 @@ def test_agenda_section_includes_calendar_episodes() -> None:
     )
     items = build_agenda_section(g, day_start_s=day_start, day_end_s=day_end)
     assert any(it.section == "agenda" and "team sync" in it.title for it in items)
+
+
+def test_commitments_section_prioritizes_overdue_goals() -> None:
+    from famulix.briefing import build_commitments_section
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    g = MemoryGraph()
+    now = 100000
+    g.add_node(
+        MemoryNode(
+            node_id="g1",
+            kind="goal",
+            title="overdue",
+            body="past due",
+            created_at_s=100,
+            is_active=True,
+            metadata={"due_at_s": str(now - 1000)},
+        )
+    )
+    g.add_node(
+        MemoryNode(
+            node_id="g2",
+            kind="goal",
+            title="soon",
+            body="next week",
+            created_at_s=200,
+            is_active=True,
+            metadata={"due_at_s": str(now + 86400 * 5)},
+        )
+    )
+    g.add_node(
+        MemoryNode(
+            node_id="g3",
+            kind="goal",
+            title="far",
+            body="far future",
+            created_at_s=300,
+            is_active=True,
+            metadata={"due_at_s": str(now + 86400 * 60)},
+        )
+    )
+    items = build_commitments_section(g, now_s=now, horizon_s=86400 * 14)
+    titles = [it.title for it in items]
+    assert "overdue" in titles
+    assert "soon" in titles
+    assert "far" not in titles
+    assert items[0].title == "overdue"
