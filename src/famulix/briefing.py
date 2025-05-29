@@ -132,6 +132,41 @@ def _section_order(section: str) -> int:
     return order.get(section, 99)
 
 
+def build_commitments_section(
+    graph: MemoryGraph,
+    *,
+    now_s: int,
+    horizon_s: int = 86400 * 14,
+) -> list[BriefingItem]:
+    """Extract goal and commitment nodes within a lookahead horizon."""
+    items: list[BriefingItem] = []
+    for node in graph.all_nodes():
+        if not node.is_active or node.kind != "goal":
+            continue
+        due = node.metadata.get("due_at_s")
+        if due is None:
+            priority = 0.4
+        else:
+            remaining = int(due) - now_s
+            if remaining < 0:
+                priority = 0.9  # overdue
+            elif remaining <= horizon_s:
+                priority = 0.5 + 0.4 * (1 - remaining / max(horizon_s, 1))
+            else:
+                continue  # beyond horizon, skip
+        items.append(
+            BriefingItem(
+                title=node.title,
+                body=node.body,
+                section="commitments",
+                memory_ids=[node.node_id],
+                priority=round(priority, 6),
+            )
+        )
+    items.sort(key=lambda it: -it.priority)
+    return items
+
+
 def build_agenda_section(
     graph: MemoryGraph,
     *,
