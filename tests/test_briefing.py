@@ -331,3 +331,59 @@ def test_commitments_section_prioritizes_overdue_goals() -> None:
     assert "soon" in titles
     assert "far" not in titles
     assert items[0].title == "overdue"
+
+
+def test_build_briefing_dedupes_memory_ids_across_sections() -> None:
+    from famulix.briefing import build_briefing
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    g = MemoryGraph()
+    now = 86400 * 20 + 3600 * 10
+    g.add_node(
+        MemoryNode(
+            node_id="goal1",
+            kind="goal",
+            title="finish report",
+            body="complete Q4 report",
+            created_at_s=now - 86400 * 2,
+            is_active=True,
+            metadata={"due_at_s": str(now + 86400 * 3)},
+        )
+    )
+    briefing = build_briefing(g, date_str="2026-01-20", now_s=now, seed=0)
+    ids = briefing.all_cited_memory_ids()
+    # Each id appears at most once across all items
+    assert len(ids) == len(briefing.items)
+
+
+def test_build_briefing_has_agenda_and_commitments_sections() -> None:
+    from famulix.briefing import build_briefing
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    g = MemoryGraph()
+    now = 86400 * 20 + 3600 * 10
+    g.add_node(
+        MemoryNode(
+            node_id="c1",
+            kind="episode",
+            title="meeting",
+            body="standup",
+            created_at_s=now - 100,
+            is_active=True,
+            metadata={"event_types": "calendar"},
+        )
+    )
+    g.add_node(
+        MemoryNode(
+            node_id="g1",
+            kind="goal",
+            title="report",
+            body="finish report",
+            created_at_s=now - 10000,
+            is_active=True,
+            metadata={"due_at_s": str(now + 86400 * 3)},
+        )
+    )
+    briefing = build_briefing(g, date_str="2026-01-20", now_s=now, seed=0)
+    assert "agenda" in briefing.sections
+    assert "commitments" in briefing.sections
