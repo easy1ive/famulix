@@ -219,7 +219,24 @@ def build_briefing(
     extra_limitations: list[str] | None = None,
 ) -> Briefing:
     """Build a complete daily briefing."""
-    items = gather_memories(graph, now_s=now_s, budget_tokens=budget_tokens)
+    agenda_items = build_agenda_section(
+        graph,
+        day_start_s=now_s - (now_s % 86400),
+        day_end_s=now_s - (now_s % 86400) + 86400,
+    )
+    commitment_items = build_commitments_section(graph, now_s=now_s)
+    memory_items = gather_memories(graph, now_s=now_s, budget_tokens=budget_tokens)
+
+    combined = agenda_items + commitment_items + memory_items
+    # Deduplicate by first memory id across sections (keep first = higher priority section)
+    seen_ids: set[str] = set()
+    items: list[BriefingItem] = []
+    for it in combined:
+        primary = it.memory_ids[0] if it.memory_ids else id(it)
+        if primary in seen_ids:
+            continue
+        seen_ids.add(primary)
+        items.append(it)
 
     # Group by section
     section_names = sorted({it.section for it in items}, key=_section_order)
