@@ -228,3 +228,59 @@ def test_empty_briefing_omits_unrepresented_day_heatmap() -> None:
     markup = render_briefing_html(briefing, graph=graph)
     assert "Memory salience by local day and hour" not in markup
     assert "<svg" in markup
+
+
+def test_agenda_section_includes_day_bound_reminders() -> None:
+    from famulix.briefing import build_agenda_section
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    g = MemoryGraph()
+    day_start = 86400 * 10
+    day_end = day_start + 86400
+    g.add_node(
+        MemoryNode(
+            node_id="r1",
+            kind="reminder",
+            title="dentist",
+            body="appt",
+            created_at_s=day_start + 3600,
+            is_active=True,
+            metadata={"due_at_s": str(day_start + 3600 * 10)},
+        )
+    )
+    g.add_node(
+        MemoryNode(
+            node_id="r2",
+            kind="reminder",
+            title="far",
+            body="later",
+            created_at_s=day_start + 100,
+            is_active=True,
+            metadata={"due_at_s": str(day_end + 1000)},
+        )
+    )
+    items = build_agenda_section(g, day_start_s=day_start, day_end_s=day_end)
+    assert any("dentist" in it.title for it in items)
+    assert not any("far" in it.title for it in items)
+
+
+def test_agenda_section_includes_calendar_episodes() -> None:
+    from famulix.briefing import build_agenda_section
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    g = MemoryGraph()
+    day_start = 86400 * 5
+    day_end = day_start + 86400
+    g.add_node(
+        MemoryNode(
+            node_id="e1",
+            kind="episode",
+            title="team sync",
+            body="weekly",
+            created_at_s=day_start + 7200,
+            is_active=True,
+            metadata={"event_types": "calendar,note"},
+        )
+    )
+    items = build_agenda_section(g, day_start_s=day_start, day_end_s=day_end)
+    assert any(it.section == "agenda" and "team sync" in it.title for it in items)

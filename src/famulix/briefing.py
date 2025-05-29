@@ -132,6 +132,46 @@ def _section_order(section: str) -> int:
     return order.get(section, 99)
 
 
+def build_agenda_section(
+    graph: MemoryGraph,
+    *,
+    day_start_s: int,
+    day_end_s: int,
+) -> list[BriefingItem]:
+    """Extract calendar and time-bound memories for the day's agenda."""
+    items: list[BriefingItem] = []
+    for node in graph.all_nodes():
+        if not node.is_active:
+            continue
+        created = node.created_at_s
+        if not (day_start_s <= created < day_end_s):
+            continue
+        if node.kind == "episode" and node.metadata.get("event_types", "").count("calendar") > 0:
+            items.append(
+                BriefingItem(
+                    title=node.title,
+                    body=node.body,
+                    section="agenda",
+                    memory_ids=[node.node_id],
+                    priority=0.7,
+                )
+            )
+        elif node.kind == "reminder":
+            due = node.metadata.get("due_at_s")
+            if due is not None and day_start_s <= int(due) < day_end_s:
+                items.append(
+                    BriefingItem(
+                        title=f"Reminder: {node.title}",
+                        body=node.body,
+                        section="agenda",
+                        memory_ids=[node.node_id],
+                        priority=0.8,
+                    )
+                )
+    items.sort(key=lambda it: -it.priority)
+    return items
+
+
 def build_briefing(
     graph: MemoryGraph,
     *,
