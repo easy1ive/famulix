@@ -252,3 +252,13 @@ def test_run_full_evaluation_different_personas_differ():
     # Different personas should have different profiles at least
     # (might have same scores by chance on small runs, but structure differs)
     assert s1.persona_id != s2.persona_id
+
+
+def test_citation_coverage_ratio_reflects_cited_items() -> None:
+    from famulix.evaluation import EvalScorecard
+
+    card = EvalScorecard(persona_id="x", seed=0, days=1)
+    card.total_briefing_items = 10
+    card.cited_items = 7
+    card.citation_coverage_ratio = card.cited_items / card.total_briefing_items
+    assert card.citation_coverage_ratio == 0.7
