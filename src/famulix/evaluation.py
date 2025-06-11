@@ -45,6 +45,9 @@ class EvalScorecard:
     contradiction_accuracy: float = 0.0
     citation_coverage: float = 0.0
     budget_adherence: bool = True
+    total_briefing_items: int = 0
+    cited_items: int = 0
+    citation_coverage_ratio: float = 0.0
     budget_violations: int = 0
     privacy_violations: int = 0
     deletion_resurrection_count: int = 0
