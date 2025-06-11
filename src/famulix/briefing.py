@@ -207,6 +207,41 @@ def build_agenda_section(
     return items
 
 
+def build_reminders_section(
+    graph: MemoryGraph,
+    *,
+    now_s: int,
+    lookahead_s: int = 86400 * 3,
+) -> list[BriefingItem]:
+    """Extract active reminders within a lookahead window."""
+    items: list[BriefingItem] = []
+    for node in graph.all_nodes():
+        if not node.is_active or node.kind != "reminder":
+            continue
+        due = node.metadata.get("due_at_s")
+        if due is None:
+            continue
+        due_s = int(due)
+        remaining = due_s - now_s
+        if remaining < 0:
+            priority = 0.95  # overdue
+        elif remaining <= lookahead_s:
+            priority = 0.5 + 0.4 * (1 - remaining / max(lookahead_s, 1))
+        else:
+            continue
+        items.append(
+            BriefingItem(
+                title=node.title,
+                body=node.body,
+                section="reminders",
+                memory_ids=[node.node_id],
+                priority=round(priority, 6),
+            )
+        )
+    items.sort(key=lambda it: -it.priority)
+    return items
+
+
 def build_briefing(
     graph: MemoryGraph,
     *,
@@ -219,15 +254,17 @@ def build_briefing(
     extra_limitations: list[str] | None = None,
 ) -> Briefing:
     """Build a complete daily briefing."""
+    day_start = now_s - (now_s % 86400)
     agenda_items = build_agenda_section(
         graph,
-        day_start_s=now_s - (now_s % 86400),
-        day_end_s=now_s - (now_s % 86400) + 86400,
+        day_start_s=day_start,
+        day_end_s=day_start + 86400,
     )
     commitment_items = build_commitments_section(graph, now_s=now_s)
+    reminder_items = build_reminders_section(graph, now_s=now_s)
     memory_items = gather_memories(graph, now_s=now_s, budget_tokens=budget_tokens)
 
-    combined = agenda_items + commitment_items + memory_items
+    combined = agenda_items + commitment_items + reminder_items + memory_items
     # Deduplicate by first memory id across sections (keep first = higher priority section)
     seen_ids: set[str] = set()
     items: list[BriefingItem] = []
