@@ -356,6 +356,74 @@ def test_build_briefing_dedupes_memory_ids_across_sections() -> None:
     assert len(ids) == len(briefing.items)
 
 
+def test_reminders_section_filters_by_lookahead() -> None:
+    from famulix.briefing import build_reminders_section
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    g = MemoryGraph()
+    now = 100000
+    g.add_node(
+        MemoryNode(
+            node_id="r1",
+            kind="reminder",
+            title="pay rent",
+            body="due soon",
+            created_at_s=100,
+            is_active=True,
+            metadata={"due_at_s": str(now + 86400)},
+        )
+    )
+    g.add_node(
+        MemoryNode(
+            node_id="r2",
+            kind="reminder",
+            title="annual review",
+            body="far future",
+            created_at_s=200,
+            is_active=True,
+            metadata={"due_at_s": str(now + 86400 * 30)},
+        )
+    )
+    g.add_node(
+        MemoryNode(
+            node_id="r3",
+            kind="reminder",
+            title="overdue bill",
+            body="past due",
+            created_at_s=50,
+            is_active=True,
+            metadata={"due_at_s": str(now - 5000)},
+        )
+    )
+    items = build_reminders_section(g, now_s=now, lookahead_s=86400 * 3)
+    titles = [it.title for it in items]
+    assert "pay rent" in titles
+    assert "overdue bill" in titles
+    assert "annual review" not in titles
+    assert items[0].title == "overdue bill"  # overdue has highest priority
+
+
+def test_reminders_section_skips_inactive_nodes() -> None:
+    from famulix.briefing import build_reminders_section
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    g = MemoryGraph()
+    now = 100000
+    g.add_node(
+        MemoryNode(
+            node_id="r1",
+            kind="reminder",
+            title="inactive",
+            body="should not appear",
+            created_at_s=100,
+            is_active=False,
+            metadata={"due_at_s": str(now + 1000)},
+        )
+    )
+    items = build_reminders_section(g, now_s=now)
+    assert len(items) == 0
+
+
 def test_build_briefing_has_agenda_and_commitments_sections() -> None:
     from famulix.briefing import build_briefing
     from famulix.memory_graph import MemoryGraph, MemoryNode
