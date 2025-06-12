@@ -174,6 +174,22 @@ def test_all_cited_memory_ids_unique_set():
     assert len(all_ids) == len(briefing.items)
 
 
+def test_citation_count_matches_unique_ids():
+    g = _populate_graph()
+    briefing = build_briefing(g, date_str="2026-01-15", now_s=1200)
+    assert briefing.citation_count == len(briefing.all_cited_memory_ids())
+    assert briefing.item_count == len(briefing.items)
+
+
+def test_section_counts_matches_sections():
+    g = _populate_graph()
+    briefing = build_briefing(g, date_str="2026-01-15", now_s=1200)
+    counts = briefing.section_counts()
+    assert sum(counts.values()) == briefing.item_count
+    for section in briefing.sections:
+        assert section in counts
+
+
 def test_connector_pipeline_builds_deterministic_resolvable_briefing() -> None:
     connector = ScriptedConnector(
         "notes",
