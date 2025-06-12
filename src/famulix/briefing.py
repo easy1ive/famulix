@@ -52,6 +52,20 @@ class Briefing:
             ids.update(item.memory_ids)
         return ids
 
+    @property
+    def citation_count(self) -> int:
+        return len(self.all_cited_memory_ids())
+
+    @property
+    def item_count(self) -> int:
+        return len(self.items)
+
+    def section_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for item in self.items:
+            counts[item.section] = counts.get(item.section, 0) + 1
+        return counts
+
     def citations_resolve(self, graph: MemoryGraph) -> bool:
         """Check that all cited memory ids point to existing, non-deleted nodes."""
         for mid in self.all_cited_memory_ids():
