@@ -396,6 +396,33 @@ def render_briefing_html(
     )
 
 
+def estimate_briefing_tokens(briefing: Briefing) -> int:
+    """Rough token estimate for the full briefing text content."""
+    total = len(briefing.title.split())
+    for item in briefing.items:
+        total += len(item.title.split()) + len(item.body.split())
+    return total
+
+
+def truncate_briefing(briefing: Briefing, *, max_items: int) -> Briefing:
+    """Return a copy of the briefing with at most max_items per section,
+    preserving section order and highest-priority items first."""
+    from dataclasses import replace
+
+    per_section: dict[str, list[BriefingItem]] = {}
+    for item in briefing.items:
+        per_section.setdefault(item.section, []).append(item)
+
+    kept: list[BriefingItem] = []
+    for section_name in briefing.sections:
+        section_items = per_section.get(section_name, [])
+        section_items_sorted = sorted(section_items, key=lambda it: -it.priority)
+        kept.extend(section_items_sorted[:max_items])
+
+    active_sections = sorted({it.section for it in kept}, key=_section_order)
+    return replace(briefing, items=kept, sections=active_sections)
+
+
 def build_briefing_from_connectors(
     connectors: ConnectorHub,
     *,
