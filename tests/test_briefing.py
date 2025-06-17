@@ -440,6 +440,36 @@ def test_reminders_section_skips_inactive_nodes() -> None:
     assert len(items) == 0
 
 
+def test_estimate_briefing_tokens_is_positive() -> None:
+    from famulix.briefing import estimate_briefing_tokens
+
+    g = _populate_graph()
+    briefing = build_briefing(g, date_str="2026-01-15", now_s=1200)
+    assert estimate_briefing_tokens(briefing) > 0
+
+
+def test_truncate_briefing_respects_max_per_section() -> None:
+    from famulix.briefing import truncate_briefing
+
+    g = _populate_graph()
+    briefing = build_briefing(g, date_str="2026-01-15", now_s=1200)
+    truncated = truncate_briefing(briefing, max_items=1)
+    # at most one item per section
+    counts = truncated.section_counts()
+    for count in counts.values():
+        assert count <= 1
+    # preserves original metadata and limitations
+    assert truncated.metadata == briefing.metadata
+    assert truncated.limitations == briefing.limitations
+    # section order preserved
+    assert truncated.sections == sorted(truncated.sections, key=lambda s: _section_order_value(s))
+
+
+def _section_order_value(section: str) -> int:
+    order = {"agenda": 0, "commitments": 1, "reminders": 2, "recent_memories": 3}
+    return order.get(section, 99)
+
+
 def test_build_briefing_has_agenda_and_commitments_sections() -> None:
     from famulix.briefing import build_briefing
     from famulix.memory_graph import MemoryGraph, MemoryNode
