@@ -191,3 +191,43 @@ def test_graph_loader_rejects_duplicate_ids_and_malformed_metadata() -> None:
     malformed = {**raw, "metadata": {"source": 3}}
     with pytest.raises(ValueError, match="metadata"):
         MemoryGraph.from_dict({"schema_version": 1, "nodes": [malformed], "edges": []})
+
+
+def test_active_nodes_excludes_inactive() -> None:
+    g = MemoryGraph()
+    a = MemoryNode.create("fact", "a", "active")
+    b = MemoryNode.create("fact", "b", "inactive")
+    # create inactive version by replacing
+    from dataclasses import replace
+
+    b_inactive = replace(b, is_active=False)
+    g.add_node(a)
+    g._nodes[b_inactive.node_id] = b_inactive
+    assert g.node_count() == 2
+    assert g.active_node_count() == 1
+    active = g.active_nodes()
+    assert len(active) == 1
+    assert active[0].node_id == a.node_id
+
+
+def test_nodes_by_kind_filters_kind_and_active() -> None:
+    g = MemoryGraph()
+    facts = [MemoryNode.create("fact", f"f{i}", f"body{i}") for i in range(3)]
+    goals = [MemoryNode.create("goal", f"g{i}", f"goal{i}") for i in range(2)]
+    for n in facts + goals:
+        g.add_node(n)
+    assert len(g.nodes_by_kind("fact")) == 3
+    assert len(g.nodes_by_kind("goal")) == 2
+    assert len(g.nodes_by_kind("reminder")) == 0
+
+
+def test_kind_counts_matches_active_nodes() -> None:
+    g = MemoryGraph()
+    for i in range(3):
+        g.add_node(MemoryNode.create("fact", f"f{i}", f"body{i}"))
+    for i in range(2):
+        g.add_node(MemoryNode.create("goal", f"g{i}", f"goal{i}"))
+    counts = g.kind_counts()
+    assert counts.get("fact") == 3
+    assert counts.get("goal") == 2
+    assert sum(counts.values()) == g.active_node_count()
