@@ -272,6 +272,29 @@ class MemoryGraph:
             raise ValueError("memory graph provenance must be acyclic")
         return graph
 
+    def remove_node(self, node_id: MemoryId) -> bool:
+        """Remove a node and all edges referencing it. Returns True if removed."""
+        if node_id not in self._nodes:
+            return False
+        # Cascade: remove all edges involving this node
+        out_ids = list(self._out_edges.get(node_id, []))
+        in_ids = list(self._in_edges.get(node_id, []))
+        for eid in out_ids + in_ids:
+            edge = self._edges.pop(eid, None)
+            if edge is None:
+                continue
+            # Remove from neighbor adjacency lists
+            self._out_edges.get(edge.from_id, []).remove(eid) if eid in self._out_edges.get(
+                edge.from_id, []
+            ) else None
+            self._in_edges.get(edge.to_id, []).remove(eid) if eid in self._in_edges.get(
+                edge.to_id, []
+            ) else None
+        del self._nodes[node_id]
+        self._out_edges.pop(node_id, None)
+        self._in_edges.pop(node_id, None)
+        return True
+
     def has_cycle_along(self, kind: EdgeKind) -> bool:
         """Return True if there is a cycle along edges of the given kind."""
         white, gray, black = 0, 1, 2
