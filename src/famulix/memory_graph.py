@@ -172,6 +172,23 @@ class MemoryGraph:
     def all_edges(self) -> list[MemoryEdge]:
         return list(self._edges.values())
 
+    def active_nodes(self) -> list[MemoryNode]:
+        return [n for n in self._nodes.values() if n.is_active]
+
+    def active_node_count(self) -> int:
+        return sum(1 for n in self._nodes.values() if n.is_active)
+
+    def nodes_by_kind(self, kind: NodeKind) -> list[MemoryNode]:
+        return [n for n in self._nodes.values() if n.kind == kind and n.is_active]
+
+    def kind_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for node in self._nodes.values():
+            if not node.is_active:
+                continue
+            counts[node.kind] = counts.get(node.kind, 0) + 1
+        return counts
+
     def to_dict(self) -> dict[str, Any]:
         """Return a versioned, deterministic representation of the graph."""
         nodes = [
