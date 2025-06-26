@@ -239,6 +239,57 @@ def test_remove_node_cascades_edges() -> None:
     assert not g.has_node(b.node_id)
 
 
+def test_reachable_from_traverses_chain() -> None:
+    g = MemoryGraph()
+    a = MemoryNode.create("fact", "a", "start")
+    b = MemoryNode.create("fact", "b", "mid")
+    c = MemoryNode.create("fact", "c", "end")
+    g.add_node(a)
+    g.add_node(b)
+    g.add_node(c)
+    g.add_edge(MemoryEdge.create(a.node_id, b.node_id, "derived_from"))
+    g.add_edge(MemoryEdge.create(b.node_id, c.node_id, "derived_from"))
+    reached = g.reachable_from([a.node_id])
+    assert a.node_id in reached
+    assert b.node_id in reached
+    assert c.node_id in reached
+
+
+def test_reachable_from_respects_edge_kind_filter() -> None:
+    g = MemoryGraph()
+    a = MemoryNode.create("episode", "a", "ep")
+    b = MemoryNode.create("entity", "b", "mentioned")
+    c = MemoryNode.create("fact", "c", "derived")
+    g.add_node(a)
+    g.add_node(b)
+    g.add_node(c)
+    g.add_edge(MemoryEdge.create(a.node_id, b.node_id, "mentions"))
+    g.add_edge(MemoryEdge.create(a.node_id, c.node_id, "derived_from"))
+    mentions = g.reachable_from([a.node_id], edge_kinds={"mentions"})
+    assert a.node_id in mentions
+    assert b.node_id in mentions
+    assert c.node_id not in mentions
+
+
+def test_reachable_from_respects_max_depth() -> None:
+    g = MemoryGraph()
+    nodes = [MemoryNode.create("fact", f"n{i}", f"body{i}") for i in range(6)]
+    for n in nodes:
+        g.add_node(n)
+    for i in range(5):
+        g.add_edge(MemoryEdge.create(nodes[i].node_id, nodes[i + 1].node_id, "derived_from"))
+    # max_depth bounds expansion rounds; depth 0 covers seeds, each round adds one hop
+    reached = g.reachable_from([nodes[0].node_id], max_depth=2)
+    assert nodes[0].node_id in reached
+    assert nodes[1].node_id in reached
+    # depth=2 means seed processed + 1 round finished before loop exits at depth==max_depth
+    assert nodes[2].node_id not in reached
+    assert nodes[5].node_id not in reached
+
+    reached_deep = g.reachable_from([nodes[0].node_id], max_depth=10)
+    assert nodes[5].node_id in reached_deep
+
+
 def test_remove_nonexistent_node_returns_false() -> None:
     g = MemoryGraph()
     assert g.remove_node("nonexistent") is False
