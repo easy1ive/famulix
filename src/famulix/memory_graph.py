@@ -189,6 +189,32 @@ class MemoryGraph:
             counts[node.kind] = counts.get(node.kind, 0) + 1
         return counts
 
+    def reachable_from(
+        self,
+        seed_ids: list[MemoryId],
+        *,
+        edge_kinds: set[EdgeKind] | None = None,
+        max_depth: int = 10,
+    ) -> set[MemoryId]:
+        """Return all node ids reachable from seeds via edges of given kinds."""
+        visited: set[MemoryId] = set()
+        frontier: list[MemoryId] = [nid for nid in seed_ids if nid in self._nodes]
+        depth = 0
+        while frontier and depth < max_depth:
+            next_frontier: list[MemoryId] = []
+            for nid in frontier:
+                if nid in visited:
+                    continue
+                visited.add(nid)
+                for edge in self.out_edges(nid):
+                    if (
+                        edge_kinds is None or edge.kind in edge_kinds
+                    ) and edge.to_id not in visited:
+                        next_frontier.append(edge.to_id)
+            frontier = next_frontier
+            depth += 1
+        return visited
+
     def to_dict(self) -> dict[str, Any]:
         """Return a versioned, deterministic representation of the graph."""
         nodes = [
