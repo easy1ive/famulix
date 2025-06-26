@@ -221,6 +221,29 @@ def test_nodes_by_kind_filters_kind_and_active() -> None:
     assert len(g.nodes_by_kind("reminder")) == 0
 
 
+def test_remove_node_cascades_edges() -> None:
+    g = MemoryGraph()
+    a = MemoryNode.create("fact", "a", "source")
+    b = MemoryNode.create("fact", "b", "target")
+    c = MemoryNode.create("fact", "c", "other")
+    g.add_node(a)
+    g.add_node(b)
+    g.add_node(c)
+    g.add_edge(MemoryEdge.create(a.node_id, b.node_id, "derived_from"))
+    g.add_edge(MemoryEdge.create(b.node_id, c.node_id, "mentions"))
+    assert g.edge_count() == 2
+    result = g.remove_node(b.node_id)
+    assert result is True
+    assert g.node_count() == 2
+    assert g.edge_count() == 0
+    assert not g.has_node(b.node_id)
+
+
+def test_remove_nonexistent_node_returns_false() -> None:
+    g = MemoryGraph()
+    assert g.remove_node("nonexistent") is False
+
+
 def test_kind_counts_matches_active_nodes() -> None:
     g = MemoryGraph()
     for i in range(3):
