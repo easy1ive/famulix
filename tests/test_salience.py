@@ -6,8 +6,10 @@ from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
 from famulix.salience import (
     SalienceConfig,
     compute_salience,
+    normalize_scores,
     score_all_nodes,
     slice_diagnostics,
+    top_k,
 )
 
 
@@ -92,6 +94,43 @@ def test_slice_diagnostics_statistics() -> None:
     assert 0.45 < diag["mean"] < 0.55
     assert diag["median"] == 0.5
     assert diag["p90"] >= 0.8
+
+
+def test_top_k_returns_sorted_descending() -> None:
+    scores = {"a": 0.8, "b": 0.3, "c": 0.9, "d": 0.5}
+    top3 = top_k(scores, 3)
+    assert len(top3) == 3
+    assert top3[0][0] == "c"  # highest
+    assert top3[1][0] == "a"
+    assert top3[2][0] == "d"
+    # Sorted by score descending, then id ascending for ties
+    assert top3 == sorted(top3, key=lambda pair: (-pair[1], pair[0]))
+
+
+def test_top_k_deterministic_on_ties() -> None:
+    scores = {"z": 0.5, "a": 0.5, "m": 0.5}
+    result = top_k(scores, 3)
+    assert [nid for nid, _ in result] == ["a", "m", "z"]  # alphabetical on tie
+
+
+def test_normalize_scores_spreads_to_zero_one() -> None:
+    scores = {"a": 10.0, "b": 20.0, "c": 30.0}
+    norm = normalize_scores(scores)
+    assert norm["a"] == 0.0
+    assert norm["c"] == 1.0
+    assert 0.0 < norm["b"] < 1.0
+    assert 0.0 <= min(norm.values()) <= max(norm.values()) <= 1.0
+
+
+def test_normalize_scores_equal_values_returns_zeros() -> None:
+    scores = {"a": 5.0, "b": 5.0}
+    norm = normalize_scores(scores)
+    assert norm["a"] == 0.0
+    assert norm["b"] == 0.0
+
+
+def test_normalize_scores_empty_input() -> None:
+    assert normalize_scores({}) == {}
 
 
 def test_salience_deterministic() -> None:
