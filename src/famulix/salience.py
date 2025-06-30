@@ -118,6 +118,15 @@ def score_all_nodes(
     }
 
 
+def recency_weights(timestamps: list[int], *, now_s: int, half_life: float) -> list[float]:
+    """Vectorized recency scores for a list of creation timestamps."""
+    if not timestamps:
+        return []
+    ages = np.maximum(now_s - np.array(timestamps, dtype=np.float64), 0.0)
+    weights = np.exp(-ages * np.log(2) / max(half_life, 1e-9))
+    return [round(float(w), 6) for w in weights]
+
+
 def top_k(scores: dict[str, float], k: int) -> list[tuple[str, float]]:
     """Return the top-k node ids by score, deterministic on ties (by id)."""
     items = [(nid, score) for nid, score in scores.items()]
