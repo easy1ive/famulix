@@ -133,6 +133,24 @@ def test_normalize_scores_empty_input() -> None:
     assert normalize_scores({}) == {}
 
 
+def test_recency_weights_matches_per_element() -> None:
+    from famulix.salience import _recency_score, recency_weights
+
+    timestamps = [100, 500, 1000, 5000, 10000]
+    now_s = 20000
+    half_life = 86400.0
+    batch = recency_weights(timestamps, now_s=now_s, half_life=half_life)
+    per_element = [round(_recency_score(ts, now_s, half_life), 6) for ts in timestamps]
+    assert batch == per_element
+    assert all(0.0 <= w <= 1.0 for w in batch)
+
+
+def test_recency_weights_empty_input() -> None:
+    from famulix.salience import recency_weights
+
+    assert recency_weights([], now_s=100, half_life=1000.0) == []
+
+
 def test_salience_deterministic() -> None:
     g = MemoryGraph()
     a = MemoryNode.create("fact", "a", "some content", created_at_s=100)
