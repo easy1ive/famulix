@@ -300,3 +300,43 @@ def parse_query(text: str) -> dict[str, object]:
         else:
             filters["terms"].append(part)  # type: ignore[attr-defined]
     return filters
+
+
+def query_with_filters(
+    query_text: str,
+    *,
+    graph: MemoryGraph,
+    index: BM25Index,
+    now_s: int,
+    config: FusionConfig | None = None,
+    max_results: int = 20,
+) -> list[RetrievalResult]:
+    """Run a parsed query against the hybrid retrieval with filters applied."""
+    parsed = parse_query(query_text)
+    terms = " ".join(parsed["terms"]) if isinstance(parsed.get("terms"), list) else ""
+    kinds = (
+        parsed.get("kinds") if isinstance(parsed.get("kinds"), list) and parsed["kinds"] else None
+    )
+    tags = parsed.get("tags") if isinstance(parsed.get("tags"), list) else []
+
+    results = hybrid_score(
+        terms or query_text,
+        graph=graph,
+        index=index,
+        now_s=now_s,
+        config=config,
+        candidate_kinds=kinds,
+    )
+
+    if tags:
+        results = [
+            r
+            for r in results
+            if any(
+                graph.get_node(r.node_id) is not None
+                and graph.get_node(r.node_id).metadata.get("tag", "") == tag  # type: ignore[union-attr]
+                for tag in tags
+            )
+        ]
+
+    return results[:max_results]
