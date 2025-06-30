@@ -118,6 +118,25 @@ def score_all_nodes(
     }
 
 
+def top_k(scores: dict[str, float], k: int) -> list[tuple[str, float]]:
+    """Return the top-k node ids by score, deterministic on ties (by id)."""
+    items = [(nid, score) for nid, score in scores.items()]
+    items.sort(key=lambda pair: (-pair[1], pair[0]))
+    return items[: max(k, 0)]
+
+
+def normalize_scores(scores: dict[str, float]) -> dict[str, float]:
+    """Min-max normalize scores to [0, 1]; returns zeros if all equal."""
+    if not scores:
+        return {}
+    vals = list(scores.values())
+    lo = min(vals)
+    hi = max(vals)
+    if hi - lo < 1e-9:
+        return {nid: 0.0 for nid in scores}
+    return {nid: round((s - lo) / (hi - lo), 6) for nid, s in scores.items()}
+
+
 def slice_diagnostics(scores: dict[str, float]) -> dict[str, float]:
     """Summary statistics for a set of salience scores."""
     vals = np.array(list(scores.values()), dtype=np.float64)
