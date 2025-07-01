@@ -232,6 +232,34 @@ def test_query_with_filters_tag_filter() -> None:
     assert all(graph.get_node(r.node_id).metadata.get("tag") == "work" for r in results)
 
 
+def test_bm25_index_doc_and_term_counts() -> None:
+    index = BM25Index()
+    assert index.doc_count == 0
+    assert index.term_count == 0
+    index.add("d1", "apple banana cherry")
+    assert index.doc_count == 1
+    assert index.term_count == 3
+    index.add("d2", "banana date")
+    assert index.doc_count == 2
+    assert index.term_count == 4  # apple, banana, cherry, date
+    index.remove("d1")
+    assert index.doc_count == 1
+    # term_count is len(df dict); removed terms stay with zero count
+    assert index.term_count >= 2
+
+
+def test_bm25_top_terms_by_frequency() -> None:
+    index = BM25Index()
+    index.add("d1", "apple banana cherry")
+    index.add("d2", "banana date")
+    index.add("d3", "banana apple")
+    top = index.top_terms(3)
+    assert top[0][0] == "banana"  # appears in all 3 docs
+    assert top[0][1] == 3
+    assert top[1][0] == "apple"  # appears in 2 docs
+    assert top[1][1] == 2
+
+
 def test_query_with_filters_respects_max_results() -> None:
     from famulix.retrieval import query_with_filters
 
