@@ -106,6 +106,22 @@ class BM25Index:
         del self._doc_lens[node_id]
         self._recompute_avgdl()
 
+    @property
+    def doc_count(self) -> int:
+        return len(self.docs)
+
+    @property
+    def term_count(self) -> int:
+        return len(self.df)
+
+    def doc_len(self, node_id: str) -> int:
+        return self._doc_lens.get(node_id, 0)
+
+    def top_terms(self, k: int = 10) -> list[tuple[str, int]]:
+        """Return the k most frequent terms by document frequency."""
+        terms = sorted(self.df.items(), key=lambda pair: (-pair[1], pair[0]))
+        return terms[: max(k, 0)]
+
 
 @dataclass(frozen=True)
 class FusionConfig:
