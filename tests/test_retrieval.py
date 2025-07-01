@@ -195,3 +195,52 @@ def test_hybrid_score_candidate_kind_filter_excludes_other_indexed_kinds() -> No
     index.add_node(episode)
     results = hybrid_score("meeting", graph=graph, index=index, now_s=100, candidate_kinds={"fact"})
     assert [result.node_id for result in results] == [fact.node_id]
+
+
+def test_query_with_filters_kind_filter() -> None:
+    from famulix.retrieval import query_with_filters
+
+    graph = MemoryGraph()
+    fact = MemoryNode.create("fact", "meeting", "project sync", created_at_s=100)
+    episode = MemoryNode.create("episode", "meeting", "weekly standup", created_at_s=100)
+    graph.add_node(fact)
+    graph.add_node(episode)
+    index = BM25Index()
+    index.add_node(fact)
+    index.add_node(episode)
+    results = query_with_filters("kind:fact meeting", graph=graph, index=index, now_s=200)
+    assert all(graph.get_node(r.node_id).kind == "fact" for r in results)
+    assert len(results) >= 1
+
+
+def test_query_with_filters_tag_filter() -> None:
+    from famulix.retrieval import query_with_filters
+
+    graph = MemoryGraph()
+    a = MemoryNode.create(
+        "fact", "note a", "important thing", created_at_s=100, metadata={"tag": "work"}
+    )
+    b = MemoryNode.create(
+        "fact", "note b", "important personal thing", created_at_s=100, metadata={"tag": "personal"}
+    )
+    graph.add_node(a)
+    graph.add_node(b)
+    index = BM25Index()
+    index.add_node(a)
+    index.add_node(b)
+    results = query_with_filters("tag:work important", graph=graph, index=index, now_s=200)
+    assert all(graph.get_node(r.node_id).metadata.get("tag") == "work" for r in results)
+
+
+def test_query_with_filters_respects_max_results() -> None:
+    from famulix.retrieval import query_with_filters
+
+    graph = MemoryGraph()
+    for i in range(10):
+        node = MemoryNode.create("fact", f"doc{i}", f"content about retrieval {i}", created_at_s=i)
+        graph.add_node(node)
+        index = BM25Index()
+    for node in graph.all_nodes():
+        index.add_node(node)
+    results = query_with_filters("retrieval", graph=graph, index=index, now_s=100, max_results=3)
+    assert len(results) <= 3
