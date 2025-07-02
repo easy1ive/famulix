@@ -162,6 +162,42 @@ def assemble_context(
     )
 
 
+def brute_force_knapsack(items: Sequence[ContextItem], budget: int) -> list[int]:
+    """Enumerate all subsets to find the true optimum.
+
+    For verifying DP correctness on small instances (n <= ~20).
+    """
+    _validate_inputs(items, budget)
+    n = len(items)
+    if n == 0 or budget == 0:
+        return []
+    if n > 24:
+        raise ValueError("brute force only intended for small instances (n <= 24)")
+
+    best_value = -1.0
+    best_mask = 0
+    for mask in range(1 << n):
+        total_w = 0
+        total_v = 0.0
+        valid = True
+        for i in range(n):
+            if mask & (1 << i):
+                total_w += items[i].token_estimate
+                total_v += items[i].value
+                if total_w > budget:
+                    valid = False
+                    break
+        if valid and total_v > best_value:
+            best_value = total_v
+            best_mask = mask
+
+    selected: list[int] = []
+    for i in range(n):
+        if best_mask & (1 << i):
+            selected.append(i)
+    return selected
+
+
 def total_value(items: Sequence[ContextItem], indices: list[int]) -> float:
     return round(sum(items[i].value for i in indices), 6)
 
