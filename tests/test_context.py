@@ -165,3 +165,27 @@ def test_assembly_rejects_invalid_budget_and_item_scores() -> None:
         assemble_context([_item(1, 0, 1.0)], budget=10)
     with pytest.raises(ValueError, match="finite and non-negative"):
         assemble_context([_item(1, 2, float("inf"))], budget=10)
+
+
+def test_dp_matches_brute_force_randomized_small() -> None:
+    """DP optimal value equals brute-force optimum on 50 random small instances."""
+    import random
+
+    from famulix.context import brute_force_knapsack, total_value
+
+    rng = random.Random(42)
+    for _ in range(50):
+        n = rng.randint(1, 10)
+        items = [_item(i, rng.randint(1, 20), round(rng.uniform(0.1, 5.0), 3)) for i in range(n)]
+        budget = rng.randint(5, 80)
+        dp_indices = knapsack_dp(items, budget)
+        bf_indices = brute_force_knapsack(items, budget)
+        assert total_value(items, dp_indices) == pytest.approx(total_value(items, bf_indices))
+
+
+def test_brute_force_knapsack_respects_budget() -> None:
+    from famulix.context import brute_force_knapsack, total_weight
+
+    items = [_item(i, w, float(w)) for i, w in enumerate([3, 5, 7, 11])]
+    indices = brute_force_knapsack(items, budget=10)
+    assert total_weight(items, indices) <= 10
