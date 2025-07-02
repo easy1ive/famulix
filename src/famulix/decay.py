@@ -134,6 +134,37 @@ def tier_distribution(
     return dist
 
 
+TIER_RANK: dict[TierName, int] = {"archive": 0, "cold": 1, "warm": 2, "hot": 3}
+
+
+def _tier_rank(tier: TierName) -> int:
+    return TIER_RANK.get(tier, 1)
+
+
+def promote_tier(node: MemoryNode) -> TierName:
+    """Promote a node one tier hotter; capped at hot."""
+    tier = get_tier(node)
+    if tier == "hot":
+        return "hot"
+    if tier == "warm":
+        return "hot"
+    if tier == "cold":
+        return "warm"
+    return "cold"
+
+
+def demote_tier(node: MemoryNode) -> TierName:
+    """Demote a node one tier colder; capped at archive."""
+    tier = get_tier(node)
+    if tier == "archive":
+        return "archive"
+    if tier == "cold":
+        return "archive"
+    if tier == "warm":
+        return "cold"
+    return "warm"
+
+
 def protected_nodes_survive(
     graph: MemoryGraph,
     *,
