@@ -139,6 +139,37 @@ def decode_fact_candidate(event: Event, node: MemoryNode) -> str | None:
     return source[start:end]
 
 
+def _text_overlap(a: str, b: str) -> float:
+    """Token Jaccard overlap for deduping fact candidates."""
+    ta = set(a.lower().split())
+    tb = set(b.lower().split())
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
+
+
+def dedupe_fact_candidates(
+    candidates: list[tuple[str, float, int, int]],
+    *,
+    threshold: float = 0.7,
+) -> list[tuple[str, float, int, int]]:
+    """Remove near-duplicate fact candidates based on token overlap.
+
+    Keeps the earlier-occurring (lower start index) candidate when two
+    candidates overlap above the threshold. Stable ordering.
+    """
+    kept: list[tuple[str, float, int, int]] = []
+    for cand in sorted(candidates, key=lambda c: c[2]):  # sort by start position
+        is_dup = False
+        for existing in kept:
+            if _text_overlap(cand[0], existing[0]) >= threshold:
+                is_dup = True
+                break
+        if not is_dup:
+            kept.append(cand)
+    return kept
+
+
 def encode_events_to_graph(
     events: list[Event],
     *,
