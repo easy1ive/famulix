@@ -115,3 +115,35 @@ def test_half_life_actually_fifty_percent() -> None:
     node = MemoryNode.create("fact", "t", "b", created_at_s=0, metadata={"tier": "warm"})
     r = retention_score(node, now_s=1000, config=cfg)
     assert 0.49 < r < 0.51
+
+
+def test_promote_tier_moves_up_one_level() -> None:
+    from famulix.decay import promote_tier
+
+    cold = MemoryNode.create("fact", "c", "b", metadata={"tier": "cold"})
+    assert promote_tier(cold) == "warm"
+    warm = MemoryNode.create("fact", "w", "b", metadata={"tier": "warm"})
+    assert promote_tier(warm) == "hot"
+    hot = MemoryNode.create("fact", "h", "b", metadata={"tier": "hot"})
+    assert promote_tier(hot) == "hot"  # capped
+
+
+def test_demote_tier_moves_down_one_level() -> None:
+    from famulix.decay import demote_tier
+
+    hot = MemoryNode.create("fact", "h", "b", metadata={"tier": "hot"})
+    assert demote_tier(hot) == "warm"
+    warm = MemoryNode.create("fact", "w", "b", metadata={"tier": "warm"})
+    assert demote_tier(warm) == "cold"
+    archive = MemoryNode.create("fact", "a", "b", metadata={"tier": "archive"})
+    assert demote_tier(archive) == "archive"  # capped
+
+
+def test_promote_then_demote_roundtrip_at_mid_tiers() -> None:
+    from famulix.decay import demote_tier, promote_tier
+
+    warm = MemoryNode.create("fact", "w", "b", metadata={"tier": "warm"})
+    promoted = promote_tier(warm)
+    # Make a node with the promoted tier
+    promoted_node = MemoryNode.create("fact", "p", "b", metadata={"tier": promoted})
+    assert demote_tier(promoted_node) == "warm"
