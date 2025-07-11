@@ -117,6 +117,31 @@ class PreferenceProfile:
     def preference_keys(self) -> set[str]:
         return {e.pref_key for e in self.entries}
 
+    def entry_count(self) -> int:
+        return len(self.entries)
+
+    def entries_for_key(self, key: str) -> list[PreferenceEntry]:
+        return [e for e in self.entries if e.pref_key == key]
+
+
+def merge_profiles(*profiles: PreferenceProfile) -> PreferenceProfile:
+    """Merge multiple preference profiles into one, sorted by timestamp."""
+    merged = PreferenceProfile()
+    all_entries: list[PreferenceEntry] = []
+    for profile in profiles:
+        all_entries.extend(profile.entries)
+    all_entries.sort(key=lambda e: e.timestamp_s)
+    for entry in all_entries:
+        merged.add_feedback(
+            entry.pref_key,
+            entry.value,
+            entry.signal,
+            entry.timestamp_s,
+            confidence=entry.confidence,
+            source=entry.source,
+        )
+    return merged
+
 
 def brier_score(
     predictions: list[float],
