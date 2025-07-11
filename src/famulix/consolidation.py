@@ -29,6 +29,19 @@ class ConsolidationReport:
     def total_changes(self) -> int:
         return len(self.merged_pairs) + len(self.superseded) + len(self.summary_nodes)
 
+    @property
+    def is_empty(self) -> bool:
+        return self.total_changes() == 0
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "merged_pairs": list(self.merged_pairs),
+            "superseded": list(self.superseded),
+            "contradictions_resolved": self.contradictions_resolved,
+            "summary_nodes": list(self.summary_nodes),
+            "total_changes": self.total_changes(),
+        }
+
 
 def _normalized_text(node: MemoryNode) -> str:
     text = f"{node.title} {node.body}".lower()
