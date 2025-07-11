@@ -133,3 +133,34 @@ def test_encode_deterministic() -> None:
     ids_1 = {n.node_id for n in g1.all_nodes()}
     ids_2 = {n.node_id for n in g2.all_nodes()}
     assert ids_1 == ids_2
+
+
+def test_dedupe_fact_candidates_removes_near_duplicates() -> None:
+    from famulix.encoding import dedupe_fact_candidates
+
+    candidates = [
+        ("the project deadline is friday", 0.8, 0, 30),
+        ("the project deadline is friday", 0.7, 40, 70),  # exact duplicate
+        ("another unrelated fact here", 0.6, 80, 105),
+    ]
+    result = dedupe_fact_candidates(candidates)
+    assert len(result) == 2
+    assert result[0][0] == candidates[0][0]  # first occurrence kept
+
+
+def test_dedupe_fact_candidates_keeps_distinct() -> None:
+    from famulix.encoding import dedupe_fact_candidates
+
+    candidates = [
+        ("project deadline is friday", 0.8, 0, 25),
+        ("weekly team meeting on monday", 0.7, 30, 60),
+        ("buy groceries after work", 0.6, 70, 95),
+    ]
+    result = dedupe_fact_candidates(candidates)
+    assert len(result) == 3
+
+
+def test_dedupe_fact_candidates_empty_input() -> None:
+    from famulix.encoding import dedupe_fact_candidates
+
+    assert dedupe_fact_candidates([]) == []
