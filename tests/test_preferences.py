@@ -173,3 +173,42 @@ def test_calibration_rejects_invalid_outcomes(outcome: int) -> None:
 def test_reliability_bins_rejects_nonpositive_bin_count() -> None:
     with pytest.raises(ValueError, match="positive"):
         reliability_bins([0.5], [1], n_bins=0)
+
+
+def test_merge_profiles_combines_entries_by_timestamp() -> None:
+    from famulix.preferences import merge_profiles
+
+    p1 = PreferenceProfile()
+    p1.add_feedback("tone", "formal", "up", timestamp_s=100, confidence=0.8, source="t1")
+    p1.add_feedback("length", "short", "accept", timestamp_s=300, confidence=0.6, source="t1")
+
+    p2 = PreferenceProfile()
+    p2.add_feedback("tone", "casual", "up", timestamp_s=200, confidence=0.7, source="t2")
+
+    merged = merge_profiles(p1, p2)
+    assert merged.entry_count() == 3
+    # Entries sorted by timestamp
+    timestamps = [e.timestamp_s for e in merged.entries]
+    assert timestamps == sorted(timestamps)
+    # Resulting preferences should reflect all three signals
+    prefs = merged.current_preferences(now_s=400)
+    assert "tone" in prefs
+    assert "length" in prefs
+
+
+def test_merge_profiles_empty_returns_empty() -> None:
+    from famulix.preferences import merge_profiles
+
+    merged = merge_profiles()
+    assert merged.entry_count() == 0
+    assert merged.version == 1
+
+
+def test_entries_for_key_filters_correctly() -> None:
+    p = PreferenceProfile()
+    p.add_feedback("tone", "formal", "up", timestamp_s=100)
+    p.add_feedback("tone", "casual", "down", timestamp_s=200)
+    p.add_feedback("length", "short", "accept", timestamp_s=300)
+    assert len(p.entries_for_key("tone")) == 2
+    assert len(p.entries_for_key("length")) == 1
+    assert len(p.entries_for_key("nonexistent")) == 0
