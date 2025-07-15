@@ -199,6 +199,24 @@ def order_items(
     return list(items)
 
 
+def default_style(config: PersonalizationConfig | None = None) -> BriefingStyle:
+    """Return a cold-start briefing style built entirely from defaults."""
+    cfg = config or PersonalizationConfig()
+    from famulix.preferences import PreferenceProfile
+
+    return apply_preferences(PreferenceProfile(), now_s=0, config=cfg)
+
+
+def style_summary(style: BriefingStyle) -> dict[str, str]:
+    """Return a flat dict of style choices for logging/serialization."""
+    return {
+        "tone": style.tone,
+        "format": style.format,
+        "ordering": style.ordering,
+        "length": style.length,
+    }
+
+
 def _number(value: object, default: float) -> float:
     """Read a numeric sort field without accepting arbitrary objects."""
     return float(value) if isinstance(value, (int, float)) else default
