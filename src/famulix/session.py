@@ -153,6 +153,16 @@ class SessionRecorder:
             raise ValueError("checkpoint cursor is stale")
         return source
 
+    def entry_count(self) -> int:
+        return len(self.entries)
+
+    def kinds_seen(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for entry in self.entries:
+            kind = entry.get("kind", "unknown")
+            counts[kind] = counts.get(kind, 0) + 1
+        return counts
+
     def digest(self) -> str:
         """Return a hash of the entire session for diff/comparison."""
         text = self.to_jsonl()
