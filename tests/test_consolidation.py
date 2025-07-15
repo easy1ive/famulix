@@ -167,3 +167,30 @@ def test_consolidation_deterministic() -> None:
     active1 = {n.node_id for n in g1.all_nodes() if n.is_active}
     active2 = {n.node_id for n in g2.all_nodes() if n.is_active}
     assert active1 == active2
+
+
+def test_consolidation_is_idempotent() -> None:
+    """A second consolidation pass should produce no further changes."""
+    g = MemoryGraph()
+    g.add_node(MemoryNode.create("fact", "alpha", "the quick brown fox jumps", created_at_s=100))
+    g.add_node(MemoryNode.create("fact", "alpha", "the quick brown fox hops", created_at_s=120))
+    g.add_node(MemoryNode.create("fact", "beta", "entirely different content", created_at_s=150))
+    first_report = consolidate_graph(g)
+    assert first_report.total_changes() > 0
+    second_report = consolidate_graph(g)
+    assert second_report.is_empty
+    assert second_report.total_changes() == 0
+
+
+def test_consolidation_report_to_dict_keys() -> None:
+    from famulix.consolidation import ConsolidationReport
+
+    report = ConsolidationReport()
+    d = report.to_dict()
+    assert set(d.keys()) >= {
+        "merged_pairs",
+        "superseded",
+        "contradictions_resolved",
+        "total_changes",
+    }
+    assert d["total_changes"] == 0
