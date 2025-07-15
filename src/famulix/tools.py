@@ -211,6 +211,21 @@ class ToolRegistry:
     def has_tool(self, name: str) -> bool:
         return name in self._tools
 
+    def tool_count(self) -> int:
+        return len(self._tools)
+
+    def tools_by_capability(self, tag: str) -> list[ToolSpec]:
+        """Return tools that carry the given capability tag."""
+        return [spec for spec in self.list_specs() if tag in spec.capability_tags]
+
+    def side_effect_summary(self) -> dict[str, int]:
+        """Count tools by side-effect class."""
+        counts: dict[str, int] = {}
+        for spec in self.list_specs():
+            key = spec.side_effect_class
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
     def preflight(
         self,
         name: str,
