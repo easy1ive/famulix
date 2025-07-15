@@ -343,3 +343,61 @@ def test_preflight_validates_without_calling_handler() -> None:
     assert any("missing capabilities" in error for error in errors)
     assert calls == []
     assert registry.preflight("unknown", {}) == ["tool not found: unknown"]
+
+
+def test_tool_count_matches_registered() -> None:
+    from famulix.tools import build_default_registry
+
+    registry = build_default_registry()
+    assert registry.tool_count() == len(registry.list_specs())
+
+
+def test_tools_by_capability_filters_correctly() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="read_notes",
+            description="read notes",
+            parameters={"type": "object", "properties": {}, "required": []},
+            capability_tags=frozenset({"notes.read", "memory"}),
+        ),
+        lambda: "notes",
+    )
+    registry.register(
+        ToolSpec(
+            name="read_calendar",
+            description="read calendar",
+            parameters={"type": "object", "properties": {}, "required": []},
+            capability_tags=frozenset({"calendar.read", "memory"}),
+        ),
+        lambda: "calendar",
+    )
+    registry.register(
+        ToolSpec(
+            name="send_email",
+            description="send email",
+            parameters={"type": "object", "properties": {}, "required": []},
+            side_effect_class="write",
+            idempotent=True,
+            capability_tags=frozenset({"email.write"}),
+        ),
+        lambda: "sent",
+    )
+    memory_tools = registry.tools_by_capability("memory")
+    assert len(memory_tools) == 2
+    assert {t.name for t in memory_tools} == {"read_notes", "read_calendar"}
+    email_tools = registry.tools_by_capability("email.write")
+    assert len(email_tools) == 1
+    assert email_tools[0].name == "send_email"
+
+
+def test_side_effect_summary_counts_by_class() -> None:
+    from famulix.tools import build_default_registry
+
+    registry = build_default_registry()
+    summary = registry.side_effect_summary()
+    assert sum(summary.values()) == registry.tool_count()
+    # default registry has tools with side_effect_class "none"
+    assert "none" in summary
