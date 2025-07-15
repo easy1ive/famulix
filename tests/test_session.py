@@ -217,3 +217,26 @@ def test_session_diff_reports_first_changed_frame() -> None:
     result = session_diff(left, right)
     assert result["identical"] is False
     assert result["first_difference"] == 0
+
+
+def test_entry_count_matches_records() -> None:
+    rec = SessionRecorder("s1")
+    assert rec.entry_count() == 0
+    rec.record("event", {"data": 1}, 100)
+    assert rec.entry_count() == 1
+    rec.record("decision", {"choice": "a"}, 200)
+    assert rec.entry_count() == 2
+
+
+def test_kinds_seen_counts_each_kind() -> None:
+    rec = SessionRecorder("s2")
+    rec.record("event", {"data": 1}, 100)
+    rec.record("event", {"data": 2}, 200)
+    rec.record("recall", {"query": "x"}, 300)
+    rec.record("event", {"data": 3}, 400)
+    rec.record("decision", {"choice": "y"}, 500)
+    counts = rec.kinds_seen()
+    assert counts["event"] == 3
+    assert counts["recall"] == 1
+    assert counts["decision"] == 1
+    assert sum(counts.values()) == rec.entry_count()
