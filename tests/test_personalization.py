@@ -107,3 +107,44 @@ def test_order_items_unknown_ordering_returns_copy() -> None:
     ordered = order_items(items, "unknown")
     assert ordered == items
     assert ordered is not items  # new list
+
+
+def test_default_style_matches_cold_start() -> None:
+    from famulix.personalization import default_style
+
+    style = default_style()
+    assert style.tone == "neutral"
+    assert style.format == "markdown"
+    assert style.ordering == "priority"
+    assert style.length == "medium"
+    # All four defaults applied with explanations
+    assert len(style.explain()) == 4
+    assert all("cold-start" in e for e in style.explain())
+
+
+def test_style_summary_matches_style_fields() -> None:
+    from famulix.personalization import default_style, style_summary
+
+    style = default_style()
+    summary = style_summary(style)
+    assert set(summary.keys()) == {"tone", "format", "ordering", "length"}
+    assert summary["tone"] == style.tone
+    assert summary["format"] == style.format
+    assert summary["ordering"] == style.ordering
+    assert summary["length"] == style.length
+
+
+def test_default_style_with_custom_config() -> None:
+    from famulix.personalization import PersonalizationConfig, default_style
+
+    cfg = PersonalizationConfig(
+        default_tone="formal",
+        default_format="html",
+        default_ordering="recency",
+        default_length="short",
+    )
+    style = default_style(cfg)
+    assert style.tone == "formal"
+    assert style.format == "html"
+    assert style.ordering == "recency"
+    assert style.length == "short"
