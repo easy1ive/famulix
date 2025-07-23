@@ -130,6 +130,18 @@ class EventLog:
             raise ValueError("event log frame checksum does not match stored checksum")
         return Event.from_envelope(env)
 
+    def sources(self) -> list[str]:
+        """Return distinct source labels in the log, alphabetically."""
+        cur = self._conn.execute("SELECT DISTINCT source FROM event_log ORDER BY source")
+        return [row[0] for row in cur if row[0]]
+
+    def type_counts(self) -> dict[str, int]:
+        """Count events by type across the log."""
+        counts: dict[str, int] = {}
+        for evt in self.iter_events():
+            counts[evt.event_type] = counts.get(evt.event_type, 0) + 1
+        return counts
+
     def replay_into(self, other: EventLog) -> int:
         """Replay all events into another log. Returns count copied."""
         n = 0
