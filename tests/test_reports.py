@@ -163,3 +163,30 @@ def test_memory_timeline_escapes_md_special_chars() -> None:
     # escape_md backslash-escapes * and _
     assert "\\*" in md
     assert "\\_" in md
+
+
+def test_svg_bar_chart_renders_svg() -> None:
+    from famulix.reports import svg_bar_chart
+
+    items = [("alpha", 3.0), ("beta", 5.0), ("gamma", 2.0)]
+    svg = svg_bar_chart(items, title="Test Chart")
+    assert "<svg" in svg
+    assert "</svg>" in svg
+    # Each label appears in the chart
+    for label, _ in items:
+        assert label in svg
+    assert "Test Chart" in svg
+
+
+def test_svg_bar_chart_empty_returns_empty_svg() -> None:
+    from famulix.reports import svg_bar_chart
+
+    assert svg_bar_chart([]) == "<svg/>"
+
+
+def test_svg_bar_chart_escapes_labels() -> None:
+    from famulix.reports import svg_bar_chart
+
+    svg = svg_bar_chart([("<script>", 1.0)])
+    assert "<script>" not in svg
+    assert "&lt;script&gt;" in svg
