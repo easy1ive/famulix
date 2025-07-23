@@ -63,6 +63,19 @@ class TriggerLog:
     def count_by_action(self, action: str) -> int:
         return sum(1 for e in self.entries if e["action"] == action)
 
+    def action_summary(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for entry in self.entries:
+            action = str(entry.get("action", "unknown"))
+            counts[action] = counts.get(action, 0) + 1
+        return counts
+
+    def entry_count(self) -> int:
+        return len(self.entries)
+
+    def clear(self) -> None:
+        self.entries.clear()
+
 
 def _is_quiet_hour(timestamp_s: int, config: TriggerConfig) -> bool:
     """Check if a given timestamp falls within quiet hours (local time, UTC+8)."""
