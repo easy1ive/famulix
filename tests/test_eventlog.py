@@ -128,3 +128,25 @@ def test_v1_database_migrates_and_backfills_source(tmp_path: Path) -> None:
 
     assert source_row == ("legacy-chat",)
     assert schema_version == 2
+
+
+def test_sources_returns_distinct_sorted() -> None:
+    with EventLog(":memory:") as log:
+        log.append(note_event(100, "s", "a"), inserted_at_s=100)
+        log.append(message_event(200, "chat", "in", "alice", "hi"), inserted_at_s=200)
+        log.append(note_event(300, "s", "b"), inserted_at_s=300)
+        sources = log.sources()
+        assert sources == sorted(sources)
+        assert "s" in sources
+        assert "chat" in sources
+
+
+def test_type_counts_matches_event_types() -> None:
+    with EventLog(":memory:") as log:
+        log.append(note_event(100, "s", "a"), inserted_at_s=100)
+        log.append(note_event(200, "s", "b"), inserted_at_s=200)
+        log.append(message_event(300, "chat", "in", "alice", "hi"), inserted_at_s=300)
+        counts = log.type_counts()
+        assert counts.get("note", 0) == 2
+        assert counts.get("message", 0) == 1
+        assert sum(counts.values()) == log.count()
