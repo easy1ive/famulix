@@ -59,3 +59,41 @@ def test_day_bucket_from_explicit_dt() -> None:
     dt = datetime.fromtimestamp(0, tz=UTC)
     bucket = clock.day_bucket(dt)
     assert bucket == "1970-01-01"
+
+
+def test_day_bounds_epoch_is_24h() -> None:
+    from famulix.clock import day_bounds_epoch
+
+    start, end = day_bounds_epoch("2026-01-15")
+    assert end - start == 86400
+    # start matches day_start_epoch
+    from famulix.clock import day_start_epoch
+
+    assert start == day_start_epoch("2026-01-15")
+
+
+def test_week_bounds_epoch_is_7days_from_monday() -> None:
+    from famulix.clock import week_bounds_epoch
+
+    # 2026-01-15 is a Thursday
+    start, end = week_bounds_epoch("2026-01-15")
+    assert end - start == 86400 * 7
+    # Monday is 2026-01-12
+    from datetime import datetime, timedelta, timezone
+
+    tz = timezone(timedelta(hours=8))
+    monday = datetime(2026, 1, 12, 0, 0, tzinfo=tz)
+    assert start == int(monday.timestamp())
+
+
+def test_week_bounds_on_monday_starts_same_day() -> None:
+    from famulix.clock import week_bounds_epoch
+
+    # 2026-01-12 is a Monday
+    start, end = week_bounds_epoch("2026-01-12")
+    assert end - start == 86400 * 7
+    from datetime import datetime, timedelta, timezone
+
+    tz = timezone(timedelta(hours=8))
+    expected_start = datetime(2026, 1, 12, 0, 0, tzinfo=tz)
+    assert start == int(expected_start.timestamp())
