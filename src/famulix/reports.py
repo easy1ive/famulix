@@ -198,6 +198,65 @@ def svg_heatmap(
     return svg
 
 
+def svg_bar_chart(
+    items: list[tuple[str, float]],
+    *,
+    title: str = "",
+    width: int = 480,
+    height: int = 200,
+    color: str = "#4a90d9",
+) -> str:
+    """Render a simple SVG bar chart with labels.
+
+    items: list of (label, value) tuples. Values are normalized to the max.
+    """
+    if not items:
+        return "<svg/>"
+    max_val = max(v for _, v in items) or 1.0
+    bar_h = 18
+    gap = 6
+    pad_left = 120
+    pad_right = 40
+    pad_top = 28 if title else 8
+    plot_w = width - pad_left - pad_right
+    n = len(items)
+    total_h = pad_top + n * (bar_h + gap) + 8
+
+    bars: list[str] = []
+    labels: list[str] = []
+    for i, (label, value) in enumerate(items):
+        y = pad_top + i * (bar_h + gap)
+        w = max((value / max_val) * plot_w, 2)
+        bars.append(
+            f'<rect x="{pad_left}" y="{y:.1f}" width="{w:.1f}" height="{bar_h}" '
+            f'fill="{color}" rx="3"/>'
+        )
+        labels.append(
+            f'<text x="{pad_left - 6}" y="{y + 13:.1f}" text-anchor="end" '
+            f'font-size="11" fill="#333">{escape_html(label[:24])}</text>'
+        )
+        # value label
+        bars.append(
+            f'<text x="{pad_left + w + 4:.1f}" y="{y + 13:.1f}" '
+            f'font-size="10" fill="#666">{value:.2f}</text>'
+        )
+
+    title_el = (
+        f'<text x="{width / 2}" y="18" text-anchor="middle" font-size="14" '
+        f'font-weight="bold" fill="#222">{escape_html(title)}</text>'
+        if title
+        else ""
+    )
+
+    svg = f"""<svg viewBox="0 0 {width} {total_h}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="{width}" height="{total_h}" fill="#fafafa"/>
+  {title_el}
+  {"".join(bars)}
+  {"".join(labels)}
+</svg>"""
+    return svg
+
+
 def svg_commitment_timeline(
     items: list[tuple[str, float, float]],
     *,
