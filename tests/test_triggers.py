@@ -111,3 +111,29 @@ def test_trigger_config_rejects_out_of_range_hours() -> None:
 
     with pytest.raises(ValueError, match="quiet hours"):
         generate_triggers(MemoryGraph(), now_s=1, config=TriggerConfig(quiet_hours_start=24))
+
+
+def test_trigger_log_action_summary() -> None:
+    from famulix.triggers import TriggerLog
+
+    log = TriggerLog()
+    log.record(timestamp_s=100, trigger_id="t1", memory_id="m1", action="generated")
+    log.record(timestamp_s=200, trigger_id="t2", memory_id="m2", action="generated")
+    log.record(
+        timestamp_s=300, trigger_id="t3", memory_id="m3", action="suppressed", reason="cooldown"
+    )
+    summary = log.action_summary()
+    assert summary["generated"] == 2
+    assert summary["suppressed"] == 1
+    assert sum(summary.values()) == log.entry_count()
+
+
+def test_trigger_log_clear_removes_entries() -> None:
+    from famulix.triggers import TriggerLog
+
+    log = TriggerLog()
+    log.record(timestamp_s=100, trigger_id="t1", memory_id="m1", action="generated")
+    assert log.entry_count() == 1
+    log.clear()
+    assert log.entry_count() == 0
+    assert log.action_summary() == {}
