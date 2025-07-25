@@ -123,6 +123,28 @@ class HistoryManifest:
     planted_preference_count: int = 0
     checksum: str = ""
 
+    def planted_total(self) -> int:
+        return (
+            self.planted_fact_count
+            + self.planted_contradiction_count
+            + self.planted_preference_count
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "persona_id": self.persona_id,
+            "seed": self.seed,
+            "days": self.days,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "event_count": self.event_count,
+            "by_type": dict(self.by_type),
+            "planted_fact_count": self.planted_fact_count,
+            "planted_contradiction_count": self.planted_contradiction_count,
+            "planted_preference_count": self.planted_preference_count,
+            "checksum": self.checksum,
+        }
+
 
 def _file_event(timestamp_s: int, source: str, path: str, action: str) -> Event:
     return Event.create("file_touch", timestamp_s, source, {"path": path, "action": action})
