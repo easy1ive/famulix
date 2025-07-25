@@ -213,6 +213,16 @@ class AccessLog:
     def filter_by_actor(self, actor: str) -> list[dict[str, object]]:
         return [dict(e) for e in self._entries if e["actor"] == actor]
 
+    def result_summary(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for entry in self._entries:
+            result = str(entry.get("result", "unknown"))
+            counts[result] = counts.get(result, 0) + 1
+        return counts
+
+    def entry_count(self) -> int:
+        return len(self._entries)
+
 
 @dataclass(frozen=True)
 class AccessDecision:
