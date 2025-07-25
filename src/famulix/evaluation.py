@@ -77,6 +77,23 @@ class EvalScorecard:
             "slices": {k: v for k, v in self.slices.items()},
         }
 
+    def summary(self) -> str:
+        """A short human-readable summary of the scorecard."""
+        recall5 = self.recall_at_k.get("5", 0.0)
+        precision5 = self.precision_at_k.get("5", 0.0)
+        lines = [
+            f"Eval scorecard for persona={self.persona_id} seed={self.seed} days={self.days}",
+            f"  recall@5={recall5:.3f}  precision@5={precision5:.3f}",
+            f"  contradiction_accuracy={self.contradiction_accuracy:.3f}",
+            f"  citation_coverage={self.citation_coverage:.3f}",
+            f"  budget_adherence={self.budget_adherence} violations={self.budget_violations}",
+            f"  privacy_violations={self.privacy_violations}",
+            f"  deletion_resurrections={self.deletion_resurrection_count}",
+            f"  replay_deterministic={self.replay_deterministic}",
+            f"  preference_brier={self.preference_brier_score:.3f}",
+        ]
+        return "\n".join(lines)
+
 
 def _build_graph_from_events(events: list[Event]) -> MemoryGraph:
     return encode_events_to_graph(events)
