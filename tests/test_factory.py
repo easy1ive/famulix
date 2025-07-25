@@ -235,3 +235,36 @@ def test_short_history_still_has_planted_items():
     assert manifest.planted_fact_count >= 1
     assert manifest.planted_contradiction_count >= 1
     assert manifest.planted_preference_count >= 1
+
+
+def test_manifest_planted_total_matches_components():
+    _, manifest = generate_history("alex", seed=0, days=14)
+    total = manifest.planted_total()
+    assert total == (
+        manifest.planted_fact_count
+        + manifest.planted_contradiction_count
+        + manifest.planted_preference_count
+    )
+    assert total > 0
+
+
+def test_manifest_to_dict_round_trip_values():
+    _, manifest = generate_history("alex", seed=42, days=10)
+    d = manifest.to_dict()
+    assert d["persona_id"] == manifest.persona_id
+    assert d["seed"] == manifest.seed
+    assert d["event_count"] == manifest.event_count
+    assert d["checksum"] == manifest.checksum
+    assert set(d.keys()) >= {
+        "persona_id",
+        "seed",
+        "days",
+        "start_date",
+        "end_date",
+        "event_count",
+        "by_type",
+        "planted_fact_count",
+        "planted_contradiction_count",
+        "planted_preference_count",
+        "checksum",
+    }
