@@ -395,3 +395,27 @@ def test_access_log_decoder_rejects_unknown_fields() -> None:
         AccessLog.from_jsonl(
             '{"actor":"a","action":"r","resource":"m","result":"allowed","timestamp_s":1,"extra":0}'
         )
+
+
+def test_access_log_result_summary_counts_correctly() -> None:
+    from famulix.privacy import AccessLog
+
+    log = AccessLog()
+    log.record(actor="user1", action="read", resource="mem1", result="allowed", timestamp_s=100)
+    log.record(actor="user1", action="read", resource="mem2", result="allowed", timestamp_s=200)
+    log.record(actor="user2", action="export", resource="mem1", result="denied", timestamp_s=300)
+    summary = log.result_summary()
+    assert summary["allowed"] == 2
+    assert summary["denied"] == 1
+    assert sum(summary.values()) == log.entry_count()
+
+
+def test_access_log_entry_count_matches_records() -> None:
+    from famulix.privacy import AccessLog
+
+    log = AccessLog()
+    assert log.entry_count() == 0
+    log.record(actor="a", action="r", resource="m", result="allowed", timestamp_s=1)
+    assert log.entry_count() == 1
+    log.record(actor="a", action="w", resource="m", result="denied", timestamp_s=2)
+    assert log.entry_count() == 2
