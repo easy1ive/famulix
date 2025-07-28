@@ -262,3 +262,22 @@ def test_citation_coverage_ratio_reflects_cited_items() -> None:
     card.cited_items = 7
     card.citation_coverage_ratio = card.cited_items / card.total_briefing_items
     assert card.citation_coverage_ratio == 0.7
+
+
+def test_scorecard_summary_contains_key_metrics() -> None:
+    from famulix.evaluation import EvalScorecard
+
+    card = EvalScorecard(persona_id="test_persona", seed=42, days=30)
+    card.recall_at_k = {"5": 0.75, "10": 0.85}
+    card.precision_at_k = {"5": 0.6, "10": 0.5}
+    card.contradiction_accuracy = 0.9
+    card.citation_coverage = 0.8
+    summary = card.summary()
+    assert "test_persona" in summary
+    assert "seed=42" in summary
+    assert "days=30" in summary
+    assert "recall@5" in summary
+    assert "precision@5" in summary
+    assert "contradiction_accuracy" in summary
+    assert "citation_coverage" in summary
+    assert len(summary.splitlines()) >= 5
