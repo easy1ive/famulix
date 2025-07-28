@@ -234,3 +234,35 @@ def test_plan_json_rejects_non_object_payload() -> None:
 
     with pytest.raises(ValueError, match="object"):
         Plan.from_json("[]")
+
+
+def test_plan_step_count_matches_steps() -> None:
+    from famulix.plan_dsl import Plan, PlanStep
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(id="a", tool="echo"),
+            PlanStep(id="b", tool="echo"),
+            PlanStep(id="c", tool="add"),
+        ],
+    )
+    assert plan.step_count() == 3
+    assert plan.step_count() == len(plan.steps)
+
+
+def test_plan_tools_used_collects_unique_tools() -> None:
+    from famulix.plan_dsl import Plan, PlanStep
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(id="a", tool="echo"),
+            PlanStep(id="b", tool="echo"),
+            PlanStep(id="c", tool="add"),
+            PlanStep(id="d", tool="echo"),
+        ],
+    )
+    tools = plan.tools_used()
+    assert tools == {"echo", "add"}
+    assert len(tools) == 2
