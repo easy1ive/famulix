@@ -111,6 +111,15 @@ class ConnectorHub:
             by_identity.values(), key=lambda item: (item.timestamp_s, item.source, item.external_id)
         )
 
+    def source_count(self) -> int:
+        return len(self.connectors)
+
+    def sources(self) -> list[str]:
+        return [connector.source for connector in self.connectors]
+
+    def record_count(self) -> int:
+        return len(self.records())
+
     def to_events(self) -> list[Event]:
         """Convert normalized records to deterministic versioned events."""
         events: list[Event] = []
