@@ -65,3 +65,25 @@ def _record_for(source: str, identity: str, kind: str, timestamp: int) -> Connec
     return ConnectorRecord(
         source, identity, cast(ConnectorKind, kind), timestamp, identity, f"body:{identity}"
     )
+
+
+def test_hub_source_count_and_sources() -> None:
+    notes = ScriptedConnector("notes", (_record_for("notes", "n1", "note", 1),))
+    calendar = ScriptedConnector("calendar", (_record_for("calendar", "c1", "calendar", 2),))
+    hub = ConnectorHub([notes, calendar])
+    assert hub.source_count() == 2
+    assert hub.sources() == ["calendar", "notes"]  # sorted
+
+
+def test_hub_record_count_matches_records() -> None:
+    notes = ScriptedConnector(
+        "notes",
+        (
+            _record_for("notes", "n1", "note", 1),
+            _record_for("notes", "n2", "note", 2),
+            _record_for("notes", "n3", "note", 3),
+        ),
+    )
+    hub = ConnectorHub([notes])
+    assert hub.record_count() == len(hub.records())
+    assert hub.record_count() == 3
