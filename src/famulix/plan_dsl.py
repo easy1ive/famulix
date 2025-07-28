@@ -52,6 +52,12 @@ class Plan:
     def step_ids(self) -> set[str]:
         return {s.id for s in self.steps}
 
+    def step_count(self) -> int:
+        return len(self.steps)
+
+    def tools_used(self) -> set[str]:
+        return {step.tool for step in self.steps}
+
     def get_step(self, step_id: str) -> PlanStep | None:
         for s in self.steps:
             if s.id == step_id:
