@@ -22,3 +22,21 @@ def content_id(prefix: str, payload: str) -> str:
     """Build a content-addressed identifier: prefix_sha256hex[:24]."""
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
     return f"{prefix}_{digest}"
+
+
+def stable_hash(text: str, *, length: int = 16) -> str:
+    """Return a stable hex hash of a string."""
+    if length < 1:
+        raise ValueError("hash length must be positive")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:length]
+
+
+def truncate_string(text: str, max_len: int, suffix: str = "...") -> str:
+    """Truncate text to max_len characters, appending suffix if needed."""
+    if max_len < 0:
+        raise ValueError("max_len must be non-negative")
+    if len(text) <= max_len:
+        return text
+    if max_len <= len(suffix):
+        return suffix[:max_len]
+    return text[: max_len - len(suffix)] + suffix
