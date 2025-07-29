@@ -102,3 +102,12 @@ class ApprovalQueue:
             "denied": sum(1 for r in self.requests if r.status == "denied"),
             "expired": sum(1 for r in self.requests if r.status == "expired"),
         }
+
+    def pending_count(self) -> int:
+        return len(self.pending())
+
+    def total_count(self) -> int:
+        return len(self.requests)
+
+    def has_pending(self) -> bool:
+        return any(r.status == "pending" for r in self.requests)
