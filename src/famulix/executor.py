@@ -56,6 +56,22 @@ class ExecutionState:
     terminated: bool = False
     termination_reason: str | None = None
 
+    def step_count(self) -> int:
+        return len(self.history)
+
+    def success_count(self) -> int:
+        return sum(1 for item in self.history if item.success)
+
+    def failure_count(self) -> int:
+        return sum(1 for item in self.history if not item.success)
+
+    def status_summary(self) -> dict[str, int]:
+        return {
+            "total": self.step_count(),
+            "success": self.success_count(),
+            "failed": self.failure_count(),
+        }
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize an execution state without callable registry data."""
         return {
