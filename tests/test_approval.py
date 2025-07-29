@@ -127,3 +127,32 @@ def test_escalation_metrics() -> None:
     assert metrics["approved"] == 1
     assert metrics["denied"] == 1
     assert metrics["expired"] == 0
+
+
+def test_approval_queue_count_helpers() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    q = ApprovalQueue()
+    assert q.total_count() == 0
+    assert q.pending_count() == 0
+    assert q.has_pending() is False
+
+    q.submit(
+        ApprovalRequest(request_id="r1", requester="a", action="r", resource="x", created_at_s=100)
+    )
+    q.submit(
+        ApprovalRequest(request_id="r2", requester="a", action="r", resource="x", created_at_s=100)
+    )
+    assert q.total_count() == 2
+    assert q.pending_count() == 2
+    assert q.has_pending() is True
+
+    q.decide("r1", "approved", "bob", 200)
+    assert q.total_count() == 2
+    assert q.pending_count() == 1
+    assert q.has_pending() is True
+
+    q.decide("r2", "denied", "bob", 200)
+    assert q.total_count() == 2
+    assert q.pending_count() == 0
+    assert q.has_pending() is False
