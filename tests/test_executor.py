@@ -307,6 +307,22 @@ def test_dependency_failure_is_recorded_before_dependent_action() -> None:
     assert calls == []
 
 
+def test_execution_state_status_summary() -> None:
+    from famulix.executor import ExecutionState, StepExecution
+
+    state = ExecutionState()
+    state.history.append(StepExecution(step_id="a", success=True))
+    state.history.append(StepExecution(step_id="b", success=False, error="failed"))
+    state.history.append(StepExecution(step_id="c", success=True))
+    assert state.step_count() == 3
+    assert state.success_count() == 2
+    assert state.failure_count() == 1
+    summary = state.status_summary()
+    assert summary["total"] == 3
+    assert summary["success"] == 2
+    assert summary["failed"] == 1
+
+
 def test_execution_state_json_rejects_non_object_payload() -> None:
     import pytest
 
