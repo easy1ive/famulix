@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import random
+
+import pytest
+
+from famulix import consolidation
 from famulix.consolidation import (
     ConsolidationReport,
+    _lengths_can_reach,
+    _normalized_text,
+    _similarity,
     consolidate_graph,
     find_contradictions,
     find_near_duplicates,
@@ -247,3 +255,72 @@ def test_consolidation_report_matches_across_insertion_orders() -> None:
         reports.append(consolidate_graph(graph).to_dict())
     assert reports[0] == reports[1]
     assert reports[0]["total_changes"] > 0
+
+
+def _random_corpus(rng: random.Random, size: int) -> list[str]:
+    words = ["standup", "monday", "address", "guangzhou", "call", "dentist", "budget", "report"]
+    texts = []
+    for _ in range(size):
+        length = rng.randint(1, 6)
+        texts.append(" ".join(rng.choice(words) for _ in range(length)))
+    return texts
+
+
+def test_length_prefilter_never_rejects_a_qualifying_pair() -> None:
+    """The bound is exact: anything it rejects truly cannot reach threshold."""
+    rng = random.Random(11)
+    for threshold in (0.5, 0.7, 0.85, 0.95):
+        for text in _random_corpus(rng, 60):
+            for other in _random_corpus(rng, 60):
+                reachable = _lengths_can_reach(len(text), len(other), threshold)
+                if not reachable:
+                    assert _similarity(text, other) < threshold
+
+
+def test_find_near_duplicates_matches_unfiltered_brute_force() -> None:
+    """Prefiltering must not change which pairs are reported."""
+    rng = random.Random(7)
+    graph = MemoryGraph()
+    for index, text in enumerate(_random_corpus(rng, 40)):
+        graph.add_node(_fact(f"note {index}", text, ts=1000 + index))
+    for threshold in (0.4, 0.6, 0.85):
+        expected: dict[tuple[str, str], float] = {}
+        nodes = [n for n in graph.all_nodes() if n.kind == "fact" and n.is_active]
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                a, b = sorted((nodes[i], nodes[j]), key=lambda n: n.node_id)
+                score = _similarity(_normalized_text(a), _normalized_text(b))
+                if score >= threshold:
+                    expected[(a.node_id, b.node_id)] = score
+        actual = {
+            (a.node_id, b.node_id): score
+            for a, b, score in find_near_duplicates(graph, kind="fact", threshold=threshold)
+        }
+        assert actual == expected
+
+
+def test_duplicate_scan_skips_diffing_impossible_pairs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only length-compatible pairs should reach the expensive differ."""
+    graph = MemoryGraph()
+    graph.add_node(_fact("short", "call mum", ts=10))
+    for index in range(12):
+        graph.add_node(
+            _fact(
+                f"long {index}",
+                "a much longer body of text that cannot match the short note " * 3,
+                ts=20 + index,
+            )
+        )
+    calls: list[tuple[str, str]] = []
+    original = consolidation._similarity
+
+    def counting(a: str, b: str) -> float:
+        calls.append((a, b))
+        return original(a, b)
+
+    monkeypatch.setattr(consolidation, "_similarity", counting)
+    find_near_duplicates(graph, kind="fact", threshold=0.85)
+    total_pairs = 13 * 12 // 2
+    assert len(calls) < total_pairs
+    short_text = "short call mum"
+    assert all(short_text not in pair for pair in calls)

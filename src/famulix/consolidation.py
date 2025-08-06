@@ -60,6 +60,27 @@ def _canonical_pair(a: MemoryNode, b: MemoryNode) -> tuple[MemoryNode, MemoryNod
     return (a, b) if a.node_id <= b.node_id else (b, a)
 
 
+def _max_partner_length(length: int, threshold: float) -> float:
+    """Longest partner text that can still reach ``threshold`` similarity.
+
+    ``SequenceMatcher.ratio()`` is ``2 * matches / (len(a) + len(b))`` and the
+    matched span can never exceed the shorter text, so ``ratio`` is bounded by
+    ``2 * min / (min + max)``. Solving that bound for ``max`` gives the length
+    limit used to skip pairs that cannot possibly qualify.
+    """
+    if threshold <= 0.0:
+        return float("inf")
+    if threshold >= 2.0:
+        return float(length)
+    return length * (2.0 - threshold) / threshold
+
+
+def _lengths_can_reach(len_a: int, len_b: int, threshold: float) -> bool:
+    """Exact length prefilter: can these two lengths reach ``threshold``?"""
+    low, high = (len_a, len_b) if len_a <= len_b else (len_b, len_a)
+    return high <= _max_partner_length(low, threshold)
+
+
 def find_near_duplicates(
     graph: MemoryGraph,
     *,
@@ -70,14 +91,23 @@ def find_near_duplicates(
 
     Returns list of (node_a, node_b, score) ordered by descending score, then
     by the pair's node ids. Pairs are canonicalised so the lower id comes
-    first, which makes the result independent of graph insertion order.
+    first, which makes both the ordering and each score independent of graph
+    insertion order.
+
+    Texts are normalised once per node and pairs whose lengths cannot reach
+    the threshold are skipped without diffing; neither shortcut changes the
+    result set.
     """
     candidates = [n for n in graph.all_nodes() if (kind is None or n.kind == kind) and n.is_active]
+    texts = {n.node_id: _normalized_text(n) for n in candidates}
     pairs: list[tuple[MemoryNode, MemoryNode, float]] = []
     for i in range(len(candidates)):
         for j in range(i + 1, len(candidates)):
             a, b = _canonical_pair(candidates[i], candidates[j])
-            score = _similarity(_normalized_text(a), _normalized_text(b))
+            text_a, text_b = texts[a.node_id], texts[b.node_id]
+            if not _lengths_can_reach(len(text_a), len(text_b), threshold):
+                continue
+            score = _similarity(text_a, text_b)
             if score >= threshold:
                 pairs.append((a, b, score))
     pairs.sort(key=lambda x: (-x[2], x[0].node_id, x[1].node_id))
