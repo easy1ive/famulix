@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import random
+from collections import Counter
 
 import pytest
 
 from famulix import consolidation
 from famulix.consolidation import (
     ConsolidationReport,
+    _chars_can_reach,
     _lengths_can_reach,
     _normalized_text,
+    _shared_char_count,
     _similarity,
     consolidate_graph,
     find_contradictions,
@@ -324,3 +327,31 @@ def test_duplicate_scan_skips_diffing_impossible_pairs(monkeypatch: pytest.Monke
     assert len(calls) < total_pairs
     short_text = "short call mum"
     assert all(short_text not in pair for pair in calls)
+
+
+def test_character_bound_never_rejects_a_qualifying_pair() -> None:
+    """The multiset bound is exact: rejected pairs truly fall short."""
+    rng = random.Random(23)
+    corpus = _random_corpus(rng, 50)
+    for threshold in (0.45, 0.6, 0.85, 0.99):
+        for text in corpus:
+            counts_a = Counter(text)
+            for other in corpus:
+                counts_b = Counter(other)
+                total = len(text) + len(other)
+                if not _chars_can_reach(counts_a, counts_b, total, threshold):
+                    assert _similarity(text, other) < threshold
+
+
+def test_shared_char_count_is_symmetric_and_bounded() -> None:
+    counts_a = Counter("aabbc")
+    counts_b = Counter("abddd")
+    assert _shared_char_count(counts_a, counts_b) == _shared_char_count(counts_b, counts_a)
+    assert _shared_char_count(counts_a, counts_b) == 2
+    assert _shared_char_count(counts_a, Counter("")) == 0
+    assert _shared_char_count(counts_a, counts_a) == sum(counts_a.values())
+
+
+def test_empty_texts_never_pass_the_character_bound() -> None:
+    assert not _chars_can_reach(Counter(""), Counter(""), 0, 0.5)
+    assert not _chars_can_reach(Counter(""), Counter("abc"), 3, 0.5)
