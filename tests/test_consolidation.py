@@ -194,3 +194,56 @@ def test_consolidation_report_to_dict_keys() -> None:
         "total_changes",
     }
     assert d["total_changes"] == 0
+
+
+def test_near_duplicate_pairs_are_independent_of_insertion_order() -> None:
+    """Canonical pair ordering must survive any node insertion order."""
+    nodes = [_fact("home address", "123 Main Street, Guangzhou", ts=100 + i) for i in range(4)]
+    nodes.append(_fact("home address", "123 Main St, Guangzhou", ts=200))
+
+    forward = MemoryGraph()
+    for node in nodes:
+        forward.add_node(node)
+    backward = MemoryGraph()
+    for node in reversed(nodes):
+        backward.add_node(node)
+
+    left = find_near_duplicates(forward, kind="fact", threshold=0.8)
+    right = find_near_duplicates(backward, kind="fact", threshold=0.8)
+    assert left, "fixture must actually contain near duplicates"
+    assert [(a.node_id, b.node_id, s) for a, b, s in left] == [
+        (a.node_id, b.node_id, s) for a, b, s in right
+    ]
+    for a, b, _score in left:
+        assert a.node_id <= b.node_id
+
+
+def test_near_duplicate_pairs_are_totally_ordered() -> None:
+    """Equal scores must still produce a single stable ordering."""
+    g = MemoryGraph()
+    for offset in range(3):
+        g.add_node(_fact("standup cadence", "daily standup at nine", ts=300 + offset))
+        g.add_node(_fact("standup cadence", "daily standup at nine!", ts=400 + offset))
+    pairs = find_near_duplicates(g, kind="fact", threshold=0.5)
+    scores = [score for _, _, score in pairs]
+    assert scores == sorted(scores, reverse=True)
+    keys = [(-score, a.node_id, b.node_id) for (a, b, score) in pairs]
+    assert keys == sorted(keys)
+
+
+def test_consolidation_report_matches_across_insertion_orders() -> None:
+    """The whole consolidation pass must be insertion-order independent."""
+    nodes = [
+        _fact("home address", "123 Main Street, Guangzhou", ts=100),
+        _fact("home address", "123 Main St, Guangzhou", ts=200),
+        _fact("meeting cadence", "weekly sync on Monday", ts=150),
+        _fact("meeting cadence", "weekly sync on Tuesday", ts=250),
+    ]
+    reports = []
+    for order in (nodes, list(reversed(nodes))):
+        graph = MemoryGraph()
+        for node in order:
+            graph.add_node(node)
+        reports.append(consolidate_graph(graph).to_dict())
+    assert reports[0] == reports[1]
+    assert reports[0]["total_changes"] > 0
