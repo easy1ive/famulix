@@ -55,6 +55,11 @@ def _similarity(a: str, b: str) -> float:
     return round(SequenceMatcher(None, a, b).ratio(), 6)
 
 
+def _canonical_pair(a: MemoryNode, b: MemoryNode) -> tuple[MemoryNode, MemoryNode]:
+    """Order a pair by node id so results do not depend on traversal order."""
+    return (a, b) if a.node_id <= b.node_id else (b, a)
+
+
 def find_near_duplicates(
     graph: MemoryGraph,
     *,
@@ -63,17 +68,19 @@ def find_near_duplicates(
 ) -> list[tuple[MemoryNode, MemoryNode, float]]:
     """Find pairs of nodes with text similarity above threshold.
 
-    Returns list of (node_a, node_b, score) sorted by descending score.
+    Returns list of (node_a, node_b, score) ordered by descending score, then
+    by the pair's node ids. Pairs are canonicalised so the lower id comes
+    first, which makes the result independent of graph insertion order.
     """
     candidates = [n for n in graph.all_nodes() if (kind is None or n.kind == kind) and n.is_active]
     pairs: list[tuple[MemoryNode, MemoryNode, float]] = []
     for i in range(len(candidates)):
         for j in range(i + 1, len(candidates)):
-            a, b = candidates[i], candidates[j]
+            a, b = _canonical_pair(candidates[i], candidates[j])
             score = _similarity(_normalized_text(a), _normalized_text(b))
             if score >= threshold:
                 pairs.append((a, b, score))
-    pairs.sort(key=lambda x: x[2], reverse=True)
+    pairs.sort(key=lambda x: (-x[2], x[0].node_id, x[1].node_id))
     return pairs
 
 
