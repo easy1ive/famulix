@@ -11,6 +11,7 @@ Strategies:
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
@@ -81,6 +82,32 @@ def _lengths_can_reach(len_a: int, len_b: int, threshold: float) -> bool:
     return high <= _max_partner_length(low, threshold)
 
 
+def _shared_char_count(counts_a: Counter[str], counts_b: Counter[str]) -> int:
+    """Size of the multiset intersection of two character histograms."""
+    small, large = (counts_a, counts_b) if len(counts_a) <= len(counts_b) else (counts_b, counts_a)
+    shared = 0
+    for char, count in small.items():
+        other = large.get(char)
+        if other is not None:
+            shared += count if count < other else other
+    return shared
+
+
+def _chars_can_reach(
+    counts_a: Counter[str], counts_b: Counter[str], total_length: int, threshold: float
+) -> bool:
+    """Exact character-multiset prefilter for a similarity threshold.
+
+    ``ratio()`` equals ``2 * matches / total_length`` and the matched span can
+    never contain more copies of a character than both texts hold, so the
+    multiset intersection bounds it from above. Cheap to evaluate once per
+    pair and far cheaper than running the sequence matcher.
+    """
+    if total_length <= 0:
+        return False
+    return 2 * _shared_char_count(counts_a, counts_b) >= threshold * total_length
+
+
 def find_near_duplicates(
     graph: MemoryGraph,
     *,
@@ -94,18 +121,23 @@ def find_near_duplicates(
     first, which makes both the ordering and each score independent of graph
     insertion order.
 
-    Texts are normalised once per node and pairs whose lengths cannot reach
-    the threshold are skipped without diffing; neither shortcut changes the
-    result set.
+    Texts are normalised once per node, and a pair is only diffed after two
+    exact upper bounds — on length and on the character multiset — confirm it
+    could still reach the threshold. Neither shortcut changes the result set.
     """
     candidates = [n for n in graph.all_nodes() if (kind is None or n.kind == kind) and n.is_active]
     texts = {n.node_id: _normalized_text(n) for n in candidates}
+    counts = {node_id: Counter(text) for node_id, text in texts.items()}
     pairs: list[tuple[MemoryNode, MemoryNode, float]] = []
     for i in range(len(candidates)):
         for j in range(i + 1, len(candidates)):
             a, b = _canonical_pair(candidates[i], candidates[j])
             text_a, text_b = texts[a.node_id], texts[b.node_id]
             if not _lengths_can_reach(len(text_a), len(text_b), threshold):
+                continue
+            if not _chars_can_reach(
+                counts[a.node_id], counts[b.node_id], len(text_a) + len(text_b), threshold
+            ):
                 continue
             score = _similarity(text_a, text_b)
             if score >= threshold:
