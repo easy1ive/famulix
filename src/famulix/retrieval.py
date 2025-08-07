@@ -296,26 +296,23 @@ def parse_query(text: str) -> dict[str, object]:
     - since:YYYY-MM-DD → time window start
     - until:YYYY-MM-DD → time window end
     """
-    parts = text.split()
-    filters: dict[str, object] = {
-        "terms": [],
-        "kinds": [],
-        "tags": [],
-        "since": None,
-        "until": None,
-    }
-    for part in parts:
+    terms: list[str] = []
+    kinds: list[str] = []
+    tags: list[str] = []
+    since: str | None = None
+    until: str | None = None
+    for part in text.split():
         if part.startswith("kind:"):
-            filters["kinds"].append(part[5:])  # type: ignore[attr-defined]
+            kinds.append(part[len("kind:") :])
         elif part.startswith("tag:"):
-            filters["tags"].append(part[4:])  # type: ignore[attr-defined]
+            tags.append(part[len("tag:") :])
         elif part.startswith("since:"):
-            filters["since"] = part[6:]
+            since = part[len("since:") :]
         elif part.startswith("until:"):
-            filters["until"] = part[6:]
+            until = part[len("until:") :]
         else:
-            filters["terms"].append(part)  # type: ignore[attr-defined]
-    return filters
+            terms.append(part)
+    return {"terms": terms, "kinds": kinds, "tags": tags, "since": since, "until": until}
 
 
 def query_with_filters(
@@ -329,11 +326,12 @@ def query_with_filters(
 ) -> list[RetrievalResult]:
     """Run a parsed query against the hybrid retrieval with filters applied."""
     parsed = parse_query(query_text)
-    terms = " ".join(parsed["terms"]) if isinstance(parsed.get("terms"), list) else ""
-    kinds = (
-        parsed.get("kinds") if isinstance(parsed.get("kinds"), list) and parsed["kinds"] else None
-    )
-    tags = parsed.get("tags") if isinstance(parsed.get("tags"), list) else []
+    raw_terms = parsed.get("terms")
+    terms = " ".join(str(term) for term in raw_terms) if isinstance(raw_terms, list) else ""
+    raw_kinds = parsed.get("kinds")
+    kinds = [str(kind) for kind in raw_kinds] if isinstance(raw_kinds, list) and raw_kinds else None
+    raw_tags = parsed.get("tags")
+    tags = {str(tag) for tag in raw_tags} if isinstance(raw_tags, list) else set()
 
     results = hybrid_score(
         terms or query_text,
@@ -345,14 +343,13 @@ def query_with_filters(
     )
 
     if tags:
-        results = [
-            r
-            for r in results
-            if any(
-                graph.get_node(r.node_id) is not None
-                and graph.get_node(r.node_id).metadata.get("tag", "") == tag  # type: ignore[union-attr]
-                for tag in tags
-            )
-        ]
+        tagged: list[RetrievalResult] = []
+        for result in results:
+            node = graph.get_node(result.node_id)
+            if node is None:
+                continue
+            if str(node.metadata.get("tag", "")) in tags:
+                tagged.append(result)
+        results = tagged
 
     return results[:max_results]
