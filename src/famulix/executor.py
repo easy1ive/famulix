@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from famulix.plan_dsl import Plan, topological_order, validate_plan
+from famulix.plan_dsl import Plan, PlanStep, topological_order, validate_plan
 from famulix.tools import ToolRegistry, ToolResult
 
 
@@ -180,16 +180,18 @@ def execute_plan(
         state.termination_reason = f"invalid plan: {'; '.join(validation.errors)}"
         return state
 
-    for step in plan.steps:
+    for candidate in plan.steps:
         errors = registry.preflight(
-            step.tool,
-            step.inputs,
-            idempotency_key=step.id,
+            candidate.tool,
+            candidate.inputs,
+            idempotency_key=candidate.id,
             granted_capabilities=granted_capabilities,
         )
         if errors:
             state.terminated = True
-            state.termination_reason = f"tool preflight failed for {step.id}: {'; '.join(errors)}"
+            state.termination_reason = (
+                f"tool preflight failed for {candidate.id}: {'; '.join(errors)}"
+            )
             return state
 
     # Get execution order
@@ -204,7 +206,7 @@ def execute_plan(
             state.termination_reason = "budget exceeded"
             break
 
-        step = step_map.get(step_id)
+        step: PlanStep | None = step_map.get(step_id)
         if step is None:
             continue
 
