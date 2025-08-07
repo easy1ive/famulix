@@ -501,3 +501,52 @@ def test_build_briefing_has_agenda_and_commitments_sections() -> None:
     briefing = build_briefing(g, date_str="2026-01-20", now_s=now, seed=0)
     assert "agenda" in briefing.sections
     assert "commitments" in briefing.sections
+
+
+def _item(title: str, section: str, memory_ids: list[str], priority: float = 0.5) -> BriefingItem:
+    return BriefingItem(
+        title=title,
+        body=f"body of {title}",
+        section=section,
+        memory_ids=memory_ids,
+        priority=priority,
+    )
+
+
+def test_dedupe_keeps_first_citation_across_sections() -> None:
+    from famulix.briefing import dedupe_briefing_items
+
+    items = [
+        _item("agenda copy", "agenda", ["mem-1"]),
+        _item("reminder copy", "reminders", ["mem-1"]),
+        _item("other", "reminders", ["mem-2"]),
+    ]
+    kept = dedupe_briefing_items(items)
+    assert [item.title for item in kept] == ["agenda copy", "other"]
+
+
+def test_dedupe_keeps_every_uncited_item() -> None:
+    from famulix.briefing import dedupe_briefing_items
+
+    items = [_item(f"free {i}", "agenda", []) for i in range(4)]
+    assert len(dedupe_briefing_items(items)) == 4
+
+
+def test_dedupe_is_stable_for_repeated_runs_and_empty_input() -> None:
+    from famulix.briefing import dedupe_briefing_items
+
+    assert dedupe_briefing_items([]) == []
+    items = [_item("a", "agenda", ["m"]), _item("b", "agenda", ["m"]), _item("c", "agenda", [])]
+    first = dedupe_briefing_items(items)
+    assert [item.title for item in dedupe_briefing_items(items)] == [i.title for i in first]
+
+
+def test_dedupe_uses_only_the_primary_citation() -> None:
+    """A secondary shared citation must not suppress an item."""
+    from famulix.briefing import dedupe_briefing_items
+
+    items = [
+        _item("primary", "agenda", ["mem-1", "mem-9"]),
+        _item("secondary", "commitments", ["mem-2", "mem-9"]),
+    ]
+    assert [item.title for item in dedupe_briefing_items(items)] == ["primary", "secondary"]
