@@ -419,3 +419,32 @@ def test_access_log_entry_count_matches_records() -> None:
     assert log.entry_count() == 1
     log.record(actor="a", action="w", resource="m", result="denied", timestamp_s=2)
     assert log.entry_count() == 2
+
+
+def test_access_decision_declares_its_three_fields_once() -> None:
+    """The decision record must not carry a duplicated field block."""
+    from dataclasses import fields
+
+    from famulix.privacy import AccessDecision
+
+    assert [f.name for f in fields(AccessDecision)] == ["allowed", "effect", "reason"]
+    assert (AccessDecision.__doc__ or "").startswith("Audited result")
+    decision = AccessDecision(allowed=False, effect="deny", reason="tier too low")
+    assert AccessDecision.from_dict(decision.to_dict()) == decision
+
+
+def test_access_decision_from_dict_rejects_extra_and_missing_keys() -> None:
+    import pytest
+
+    from famulix.privacy import AccessDecision
+
+    base = {"allowed": True, "effect": "allow", "reason": "ok"}
+    assert AccessDecision.from_dict(base).allowed is True
+    with pytest.raises(ValueError):
+        AccessDecision.from_dict({**base, "extra": 1})
+    with pytest.raises(ValueError):
+        AccessDecision.from_dict({"allowed": True, "effect": "allow"})
+    with pytest.raises(ValueError):
+        AccessDecision.from_dict({**base, "effect": "maybe"})
+    with pytest.raises(ValueError):
+        AccessDecision.from_dict({**base, "allowed": "yes"})
