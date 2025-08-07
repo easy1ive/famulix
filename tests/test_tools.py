@@ -401,3 +401,53 @@ def test_side_effect_summary_counts_by_class() -> None:
     assert sum(summary.values()) == registry.tool_count()
     # default registry has tools with side_effect_class "none"
     assert "none" in summary
+
+
+def _receipt_payload() -> dict[str, object]:
+    from famulix.tools import ToolResult
+
+    result = ToolResult(
+        tool_name="echo",
+        success=True,
+        output="hi",
+        error=None,
+        duration_s=0.5,
+        retries=0,
+        receipt_id="echo_abc",
+    )
+    return result.to_dict()
+
+
+def test_receipt_from_dict_rejects_non_numeric_durations() -> None:
+    import pytest
+
+    from famulix.tools import ToolResult
+
+    for bad in ("fast", None, True, [0.5], {"s": 1}):
+        payload = dict(_receipt_payload())
+        payload["duration_s"] = bad
+        with pytest.raises(ValueError, match="real number"):
+            ToolResult.from_dict(payload)
+
+
+def test_receipt_from_dict_rejects_infinite_durations() -> None:
+    import math
+
+    import pytest
+
+    from famulix.tools import ToolResult
+
+    for infinite in (math.inf, -math.inf, math.nan):
+        payload = dict(_receipt_payload())
+        payload["duration_s"] = infinite
+        with pytest.raises(ValueError, match="finite"):
+            ToolResult.from_dict(payload)
+
+
+def test_receipt_from_dict_accepts_int_and_float_durations() -> None:
+    from famulix.tools import ToolResult
+
+    for duration in (0, 2, 1.25):
+        payload = dict(_receipt_payload())
+        payload["duration_s"] = duration
+        assert ToolResult.from_dict(payload).duration_s == float(duration)

@@ -166,18 +166,21 @@ class ToolResult:
             not isinstance(data["tool_name"], str)
             or type(data["success"]) is not bool
             or (data["error"] is not None and not isinstance(data["error"], str))
-            or type(data["duration_s"]) not in (int, float)
-            or not math.isfinite(data["duration_s"])
             or type(data["retries"]) is not int
             or not isinstance(data["receipt_id"], str)
         ):
             raise ValueError("invalid tool receipt fields")
+        duration = data["duration_s"]
+        if isinstance(duration, bool) or not isinstance(duration, (int, float)):
+            raise ValueError("tool receipt duration must be a real number")
+        if not math.isfinite(duration):
+            raise ValueError("tool receipt duration must be finite")
         return cls(
             tool_name=data["tool_name"],
             success=data["success"],
             output=data["output"],
             error=data["error"],
-            duration_s=float(data["duration_s"]),
+            duration_s=float(duration),
             retries=data["retries"],
             receipt_id=data["receipt_id"],
         )
