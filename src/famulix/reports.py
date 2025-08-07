@@ -315,18 +315,40 @@ def run_metadata(
     return meta
 
 
+def _as_timestamp(value: object) -> int:
+    """Coerce a node-dict timestamp to an int, treating unusable values as 0.
+
+    Node dicts arrive from serialised graphs and from hand-written fixtures, so
+    the timestamp may be an int, a float, a numeric string, ``None`` or junk.
+    The timeline must stay renderable and deterministic in every case instead
+    of raising part-way through a report.
+    """
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return 0
+    return 0
+
+
 def memory_timeline_markdown(
     nodes: list[dict[str, object]],
     *,
     title: str = "Memory Timeline",
 ) -> str:
     """Render a simple Markdown timeline from node dicts sorted by created_at."""
-    sorted_nodes = sorted(nodes, key=lambda n: int(n.get("created_at_s", 0)))
+    sorted_nodes = sorted(nodes, key=lambda n: _as_timestamp(n.get("created_at_s", 0)))
     sections: list[ReportSection] = []
     items: list[tuple[str, str]] = []
     for n in sorted_nodes:
         label = str(n.get("title", "(untitled)"))
-        ts = int(n.get("created_at_s", 0))
+        ts = _as_timestamp(n.get("created_at_s", 0))
         kind = str(n.get("kind", "?"))
         value = f"[{kind}] t={ts} — {n.get('body', '')}"
         items.append((label, value))
