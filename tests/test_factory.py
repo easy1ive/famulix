@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from famulix.events import Event
@@ -268,3 +270,50 @@ def test_manifest_to_dict_round_trip_values():
         "planted_preference_count",
         "checksum",
     }
+
+
+from famulix.envelope import Envelope  # noqa: E402
+
+GOLDEN_JSONL_DIGEST = "07b2cd52aaf65f7fe26e3243bf9d0d7bcdc54e138e3f1dac2fa45f3803ec289e"
+
+
+def _golden_history():
+    return generate_history("alex", seed=7, days=3, start_date="2026-03-02")
+
+
+def test_small_history_golden_fixture() -> None:
+    """Golden digests for a tiny seeded history (synthetic data).
+
+    Constants were recorded from an actual run of the factory; update them
+    only when a factory change is deliberate.
+    """
+    events, manifest = _golden_history()
+    lines = [event.to_envelope().to_jsonl_line() for event in events]
+    digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+    assert digest == GOLDEN_JSONL_DIGEST
+    assert manifest.checksum == "adf3f2ca7f67e3c5"
+    assert manifest.event_count == len(events) == 27
+    assert manifest.by_type == {
+        "calendar_item": 7,
+        "feedback_tap": 6,
+        "note": 6,
+        "message": 2,
+        "file_touch": 6,
+    }
+    assert manifest.planted_fact_count == 2
+    assert manifest.planted_contradiction_count == 1
+    assert manifest.planted_preference_count == 5
+    assert events[0].event_id == "evt_68d252dc1dc6b23df288bab4"
+    assert events[-1].event_id == "evt_8aeaad77275feb6416e5ea09"
+
+
+def test_small_history_golden_survives_envelope_roundtrip() -> None:
+    """Decoding and re-encoding every envelope reproduces the golden digest."""
+    events, _manifest = _golden_history()
+    restored = [
+        Event.from_envelope(Envelope.from_jsonl_line(event.to_envelope().to_jsonl_line()))
+        for event in events
+    ]
+    lines = [event.to_envelope().to_jsonl_line() for event in restored]
+    digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+    assert digest == GOLDEN_JSONL_DIGEST
