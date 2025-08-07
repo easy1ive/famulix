@@ -11,6 +11,7 @@ from famulix.encoding import (
     extract_fact_candidates,
 )
 from famulix.events import message_event, note_event
+from famulix.memory_graph import MemoryNode
 
 
 def test_day_segment_groups_by_local_day() -> None:
@@ -164,3 +165,45 @@ def test_dedupe_fact_candidates_empty_input() -> None:
     from famulix.encoding import dedupe_fact_candidates
 
     assert dedupe_fact_candidates([]) == []
+
+
+def _span_node(event_id: str, start: int, end: int, label: str) -> MemoryNode:
+    return MemoryNode.create(
+        "fact",
+        label,
+        "value",
+        created_at_s=5,
+        metadata={
+            "source_event": event_id,
+            "source_start": str(start),
+            "source_end": str(end),
+        },
+    )
+
+
+def test_decode_fact_candidate_returns_none_for_non_text_payload() -> None:
+    """A malformed event payload must not raise during span reconstruction."""
+    event = note_event(100, "test", "weird note")
+    event.data["text"] = {"not": "a string"}
+    node = _span_node(event.event_id, 0, 4, "non text payload")
+    assert decode_fact_candidate(event, node) is None
+
+
+def test_decode_fact_candidate_rejects_out_of_range_spans() -> None:
+    event = note_event(5, "test", "move the standup to Thursday")
+    assert decode_fact_candidate(event, _span_node(event.event_id, 0, 4, "s1")) == "move"
+    assert decode_fact_candidate(event, _span_node(event.event_id, 5, 8, "s2")) == "the"
+    assert decode_fact_candidate(event, _span_node(event.event_id, -1, 4, "s3")) is None
+    assert decode_fact_candidate(event, _span_node(event.event_id, 9, 3, "s4")) is None
+    assert decode_fact_candidate(event, _span_node(event.event_id, 0, 10_000, "s5")) is None
+
+
+def test_decode_fact_candidate_ignores_other_events_and_kinds() -> None:
+    event = note_event(5, "test", "move the standup to Thursday")
+    other = note_event(6, "test", "unrelated text")
+    node = _span_node(event.event_id, 0, 4, "s6")
+    assert decode_fact_candidate(other, node) is None
+    episode = MemoryNode.create(
+        "episode", "s7", "body", created_at_s=5, metadata={"source_event": event.event_id}
+    )
+    assert decode_fact_candidate(event, episode) is None

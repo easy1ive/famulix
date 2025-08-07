@@ -133,7 +133,10 @@ def decode_fact_candidate(event: Event, node: MemoryNode) -> str | None:
         end = int(node.metadata["source_end"])
     except (KeyError, ValueError):
         return None
-    source = event.data.get("text", "") or event.data.get("title", "")
+    payload = event.data.get("text", "") or event.data.get("title", "")
+    if not isinstance(payload, str):
+        return None
+    source: str = payload
     if start < 0 or end < start or end > len(source):
         return None
     return source[start:end]
