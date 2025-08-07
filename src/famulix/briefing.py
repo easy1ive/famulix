@@ -256,6 +256,24 @@ def build_reminders_section(
     return items
 
 
+def dedupe_briefing_items(items: list[BriefingItem]) -> list[BriefingItem]:
+    """Keep the first item per cited memory across already-ordered sections.
+
+    Sections are concatenated in priority order, so the first occurrence of a
+    memory wins. Items that cite nothing get a positional key, which keeps
+    them all and keeps the result independent of object identity.
+    """
+    seen: set[str] = set()
+    kept: list[BriefingItem] = []
+    for position, item in enumerate(items):
+        key = item.memory_ids[0] if item.memory_ids else f"#unreferenced:{position}"
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(item)
+    return kept
+
+
 def build_briefing(
     graph: MemoryGraph,
     *,
@@ -279,15 +297,7 @@ def build_briefing(
     memory_items = gather_memories(graph, now_s=now_s, budget_tokens=budget_tokens)
 
     combined = agenda_items + commitment_items + reminder_items + memory_items
-    # Deduplicate by first memory id across sections (keep first = higher priority section)
-    seen_ids: set[str] = set()
-    items: list[BriefingItem] = []
-    for it in combined:
-        primary = it.memory_ids[0] if it.memory_ids else id(it)
-        if primary in seen_ids:
-            continue
-        seen_ids.add(primary)
-        items.append(it)
+    items = dedupe_briefing_items(combined)
 
     # Group by section
     section_names = sorted({it.section for it in items}, key=_section_order)
