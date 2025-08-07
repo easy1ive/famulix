@@ -247,12 +247,6 @@ class AccessDecision:
     def to_dict(self) -> dict[str, object]:
         return {"allowed": self.allowed, "effect": self.effect, "reason": self.reason}
 
-    """Audited result of a privacy-tier access request."""
-
-    allowed: bool
-    effect: PolicyEffect
-    reason: str
-
 
 class PrivacyGate:
     """Combine policy evaluation with monotonic privacy-tier enforcement."""
