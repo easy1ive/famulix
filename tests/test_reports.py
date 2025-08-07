@@ -190,3 +190,31 @@ def test_svg_bar_chart_escapes_labels() -> None:
     svg = svg_bar_chart([("<script>", 1.0)])
     assert "<script>" not in svg
     assert "&lt;script&gt;" in svg
+
+
+def test_as_timestamp_coerces_supported_shapes_and_rejects_junk() -> None:
+    from famulix.reports import _as_timestamp
+
+    assert _as_timestamp(1700000000) == 1700000000
+    assert _as_timestamp(1700000000.9) == 1700000000
+    assert _as_timestamp("  42 ") == 42
+    assert _as_timestamp(-5) == -5
+    assert _as_timestamp(0) == 0
+    for junk in (None, "", "soon", True, [1], {"a": 1}):
+        assert _as_timestamp(junk) == 0
+
+
+def test_memory_timeline_renders_with_mixed_timestamp_types() -> None:
+    from famulix.reports import memory_timeline_markdown
+
+    nodes = [
+        {"title": "later", "kind": "fact", "body": "b", "created_at_s": 300},
+        {"title": "textual", "kind": "fact", "body": "b", "created_at_s": "200"},
+        {"title": "missing", "kind": "fact", "body": "b"},
+        {"title": "junk", "kind": "fact", "body": "b", "created_at_s": None},
+    ]
+    rendered = memory_timeline_markdown(nodes)
+    positions = [rendered.index(name) for name in ("missing", "junk", "textual", "later")]
+    assert positions == sorted(positions)
+    assert "t=300" in rendered
+    assert "t=200" in rendered
