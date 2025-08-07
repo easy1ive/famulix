@@ -272,3 +272,71 @@ def test_query_with_filters_respects_max_results() -> None:
         index.add_node(node)
     results = query_with_filters("retrieval", graph=graph, index=index, now_s=100, max_results=3)
     assert len(results) <= 3
+
+
+def test_parse_query_returns_typed_lists_for_every_filter() -> None:
+    from famulix.retrieval import parse_query
+
+    parsed = parse_query("budget kind:fact kind:goal tag:work tag:home since:2026-01-01")
+    assert parsed["terms"] == ["budget"]
+    assert parsed["kinds"] == ["fact", "goal"]
+    assert parsed["tags"] == ["work", "home"]
+    assert parsed["since"] == "2026-01-01"
+    assert parsed["until"] is None
+    for value in parsed.values():
+        assert value is None or isinstance(value, (str, list))
+
+
+def test_parse_query_of_blank_input_yields_empty_filters() -> None:
+    from famulix.retrieval import parse_query
+
+    assert parse_query("") == {
+        "terms": [],
+        "kinds": [],
+        "tags": [],
+        "since": None,
+        "until": None,
+    }
+    assert parse_query("   ")["terms"] == []
+    assert parse_query("until:2026-02-01")["until"] == "2026-02-01"
+
+
+def _tagged_graph() -> tuple[MemoryGraph, BM25Index]:
+    graph = MemoryGraph()
+    for suffix, tag in (("one", "work"), ("two", "home"), ("three", "work")):
+        graph.add_node(
+            MemoryNode.create(
+                "fact",
+                f"quarterly budget review {suffix}",
+                f"planning notes about the budget for {suffix}",
+                metadata={"tag": tag},
+                created_at_s=100,
+            )
+        )
+    index = BM25Index()
+    for node in graph.all_nodes():
+        index.add_node(node)
+    return graph, index
+
+
+def test_tag_filter_keeps_only_matching_metadata() -> None:
+    from famulix.retrieval import query_with_filters
+
+    graph, index = _tagged_graph()
+    work = query_with_filters("budget tag:work", graph=graph, index=index, now_s=200)
+    assert work, "expected the tag filter to keep the work notes"
+    for result in work:
+        node = graph.get_node(result.node_id)
+        assert node is not None
+        assert node.metadata["tag"] == "work"
+    assert query_with_filters("budget tag:sport", graph=graph, index=index, now_s=200) == []
+
+
+def test_tag_filter_accepts_several_tags_at_once() -> None:
+    from famulix.retrieval import query_with_filters
+
+    graph, index = _tagged_graph()
+    both = query_with_filters("budget tag:work tag:home", graph=graph, index=index, now_s=200)
+    assert len(both) == 3
+    only_home = query_with_filters("budget tag:home", graph=graph, index=index, now_s=200)
+    assert len(only_home) == 1
