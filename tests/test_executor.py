@@ -330,3 +330,17 @@ def test_execution_state_json_rejects_non_object_payload() -> None:
 
     with pytest.raises(ValueError, match="object"):
         ExecutionState.from_json("[]")
+
+
+def test_steps_run_in_dependency_order_not_declaration_order() -> None:
+    """Topological order must win over the order steps were declared in."""
+    plan = Plan(
+        plan_id="reordered",
+        steps=[
+            PlanStep(id="second", tool="echo", inputs={"text": "b"}, depends_on=["first"]),
+            PlanStep(id="first", tool="echo", inputs={"text": "a"}),
+        ],
+    )
+    state = execute_plan(plan, build_default_registry())
+    assert not state.terminated
+    assert [item.step_id for item in state.history] == ["first", "second"]
