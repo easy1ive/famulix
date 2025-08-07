@@ -16,6 +16,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-suffix: py${{ matrix.python-version }}
       - name: Install development and CPU model extras
         run: |
           uv venv .venv --python "${{ matrix.python-version }}"
@@ -24,3 +27,4 @@ jobs:
       - run: make test-all
       - run: make format-check
       - run: make lint
+      - run: make typecheck
