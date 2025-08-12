@@ -9,6 +9,7 @@ Marked tests skip cleanly when torch is not installed.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import import_module
 from typing import cast
@@ -235,3 +236,134 @@ def train_demo_synthetic(
     now_s = 86400 * 30
     losses = model.train_on_graphs([graph], [targets], now_s)
     return model, losses
+
+
+@dataclass(frozen=True)
+class TorchRankFusionConfig:
+    """Configuration for the trainable pairwise rank-fusion model."""
+
+    input_dim: int = 3
+    hidden_dim: int = 16
+    learning_rate: float = 0.02
+    epochs: int = 60
+    margin: float = 0.1
+    seed: int = 42
+
+
+class RankFusionMLP:
+    """Learns to order retrieval candidates from normalized fusion features.
+
+    Input rows are ``(bm25, recency, salience)`` triples. Training uses a
+    pairwise margin-ranking loss on synthetic preference pairs; inference is
+    deterministic for a fixed seed. No pretrained weights are involved and
+    results say nothing about real workloads.
+    """
+
+    def __init__(self, config: TorchRankFusionConfig | None = None) -> None:
+        if not _TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch not available. Install with: pip install famulix[torch]")
+        self.config = config or TorchRankFusionConfig()
+        torch.manual_seed(self.config.seed)
+        self.model = nn.Sequential(
+            nn.Linear(self.config.input_dim, self.config.hidden_dim),
+            nn.ReLU(),
+            nn.Linear(self.config.hidden_dim, 1),
+        )
+
+    def score_rows(self, rows: Sequence[Sequence[float]]) -> list[float]:
+        """Score feature rows; empty input yields an empty list."""
+        if not rows:
+            return []
+        tensor = torch.tensor([list(row) for row in rows], dtype=torch.float32)
+        with torch.no_grad():
+            scores = self.model(tensor).squeeze(1).tolist()
+        return [round(cast(float, value), 6) for value in scores]
+
+    def train_on_pairs(
+        self, winners: Sequence[Sequence[float]], losers: Sequence[Sequence[float]]
+    ) -> list[float]:
+        """Train with a margin-ranking loss. Returns per-epoch losses."""
+        if len(winners) != len(losers):
+            raise ValueError("winners and losers must have the same length")
+        if not winners:
+            return []
+        winner_tensor = torch.tensor([list(row) for row in winners], dtype=torch.float32)
+        loser_tensor = torch.tensor([list(row) for row in losers], dtype=torch.float32)
+        target = torch.ones(len(winners), dtype=torch.float32)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config.learning_rate)
+        criterion = nn.MarginRankingLoss(margin=self.config.margin)
+        losses: list[float] = []
+        for _epoch in range(self.config.epochs):
+            self.model.train()
+            optimizer.zero_grad()
+            loss = criterion(
+                self.model(winner_tensor).squeeze(1),
+                self.model(loser_tensor).squeeze(1),
+                target,
+            )
+            loss.backward()
+            optimizer.step()
+            losses.append(round(cast(float, loss.item()), 6))
+        return losses
+
+    def rank(self, candidates: dict[str, Sequence[float]]) -> list[str]:
+        """Order candidate ids by learned score, ties broken by id."""
+        if not candidates:
+            return []
+        ids = sorted(candidates)
+        scores = self.score_rows([candidates[key] for key in ids])
+        pairs = sorted(zip(ids, scores, strict=True), key=lambda p: (-p[1], p[0]))
+        return [key for key, _ in pairs]
+
+
+def _planted_pair_rule(row_a: Sequence[float], row_b: Sequence[float]) -> bool:
+    """Ground truth for the demo: weighted sum plus a bm25*salience interaction."""
+
+    def value(row: Sequence[float]) -> float:
+        return 0.4 * row[0] + 0.25 * row[1] + 0.35 * row[2] + 0.5 * row[0] * row[2]
+
+    return value(row_a) >= value(row_b)
+
+
+def train_rank_fusion_demo(
+    num_pairs: int = 200,
+    seed: int = 42,
+    config: TorchRankFusionConfig | None = None,
+) -> tuple[RankFusionMLP, list[float]]:
+    """Train on synthetic pairs labelled by a planted nonlinear rule.
+
+    Returns the trained model and per-epoch losses so callers can verify a
+    real loss decrease. The rule is intentionally nonlinear so a learned
+    model can measurably beat the default linear fusion baseline.
+    """
+    import random
+
+    if num_pairs <= 0:
+        raise ValueError("num_pairs must be positive")
+    rng = random.Random(seed)
+    winners: list[list[float]] = []
+    losers: list[list[float]] = []
+    for _ in range(num_pairs):
+        row_a = [rng.random(), rng.random(), rng.random()]
+        row_b = [rng.random(), rng.random(), rng.random()]
+        if _planted_pair_rule(row_a, row_b):
+            winners.append(row_a)
+            losers.append(row_b)
+        else:
+            winners.append(row_b)
+            losers.append(row_a)
+    model = RankFusionMLP(config)
+    losses = model.train_on_pairs(winners, losers)
+    return model, losses
+
+
+def rank_fusion_pair_accuracy(
+    model: RankFusionMLP, pairs: Sequence[tuple[Sequence[float], Sequence[float]]]
+) -> float:
+    """Fraction of pairs the model orders correctly (ties count as misses)."""
+    if not pairs:
+        raise ValueError("pairs must be non-empty")
+    left = model.score_rows([list(pair[0]) for pair in pairs])
+    right = model.score_rows([list(pair[1]) for pair in pairs])
+    correct = sum(1 for a, b in zip(left, right, strict=True) if a > b)
+    return round(correct / len(pairs), 6)
