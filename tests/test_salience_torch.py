@@ -165,3 +165,69 @@ def test_mlp_vs_numpy_both_produce_scores():
     assert all(0 <= v <= 1 for v in numpy_scores.values())
     assert all(0 <= v <= 1 for v in torch_scores.values())
     assert set(numpy_scores.keys()) == set(torch_scores.keys())
+
+
+from famulix.salience_torch import (  # noqa: E402
+    RankFusionMLP,
+    TorchRankFusionConfig,
+    _planted_pair_rule,
+    rank_fusion_pair_accuracy,
+    train_rank_fusion_demo,
+)
+
+
+def test_rank_fusion_demo_loss_decreases() -> None:
+    """Training on the planted synthetic rule measurably lowers the loss."""
+    _model, losses = train_rank_fusion_demo(num_pairs=200, seed=42)
+    assert losses, "demo should report per-epoch losses"
+    assert losses[-1] < losses[0], f"loss did not decrease: {losses[0]} -> {losses[-1]}"
+
+
+def test_rank_fusion_demo_is_deterministic() -> None:
+    first, losses_a = train_rank_fusion_demo(num_pairs=80, seed=7)
+    second, losses_b = train_rank_fusion_demo(num_pairs=80, seed=7)
+    assert losses_a == losses_b
+    rows = [[0.9, 0.1, 0.5], [0.2, 0.8, 0.3]]
+    assert first.score_rows(rows) == second.score_rows(rows)
+
+
+def test_rank_fusion_beats_linear_baseline_on_planted_rule() -> None:
+    """Measured comparison on synthetic pairs; not a claim about real data."""
+    import random
+
+    rng = random.Random(1234)
+    eval_pairs: list[tuple[list[float], list[float]]] = []
+    for _ in range(300):
+        a = [rng.random(), rng.random(), rng.random()]
+        b = [rng.random(), rng.random(), rng.random()]
+        winner, loser = (a, b) if _planted_pair_rule(a, b) else (b, a)
+        eval_pairs.append((winner, loser))
+    model, _losses = train_rank_fusion_demo(num_pairs=400, seed=11)
+    learned = rank_fusion_pair_accuracy(model, eval_pairs)
+
+    def linear(row: list[float]) -> float:
+        return 0.5 * row[0] + 0.2 * row[1] + 0.3 * row[2]
+
+    baseline_hits = sum(1 for win, lose in eval_pairs if linear(win) > linear(lose))
+    baseline = round(baseline_hits / len(eval_pairs), 6)
+    assert learned >= baseline
+    assert learned > 0.85
+
+
+def test_rank_fusion_rank_orders_and_tiebreaks_by_id() -> None:
+    model = RankFusionMLP(TorchRankFusionConfig(epochs=0))
+    assert model.rank({}) == []
+    candidates = {"b": [0.1, 0.1, 0.1], "a": [0.1, 0.1, 0.1]}
+    assert model.rank(candidates) == ["a", "b"]
+
+
+def test_rank_fusion_training_validation() -> None:
+    model = RankFusionMLP()
+    with pytest.raises(ValueError):
+        model.train_on_pairs([[0.1, 0.2, 0.3]], [])
+    assert model.train_on_pairs([], []) == []
+    assert model.score_rows([]) == []
+    with pytest.raises(ValueError):
+        train_rank_fusion_demo(num_pairs=0)
+    with pytest.raises(ValueError):
+        rank_fusion_pair_accuracy(model, [])
