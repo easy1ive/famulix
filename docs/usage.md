@@ -10,3 +10,19 @@ For development, create `.venv`, install `.[dev]`, then use `make build`, `make 
 the resulting graph projection. `famulix export --format json` emits the full
 versioned graph, including edges and provenance; `--format jsonl` writes a
 graph header followed by node and edge records.
+
+## Optional PyTorch extra
+
+`pip install -e '.[dev,torch]' --extra-index-url https://download.pytorch.org/whl/cpu` installs
+the CPU-only torch extra. It powers two optional learners in `famulix.salience_torch`:
+
+- `SalienceMLP` with `train_demo_synthetic` — a small MLP trained on synthetic salience targets,
+  reporting per-epoch losses that measurably decrease.
+- `RankFusionMLP` with `train_rank_fusion_demo` — a pairwise margin-ranking model over
+  `(bm25, recency, salience)` features, trained on synthetic pairs with a planted nonlinear rule
+  and compared in tests against the default linear fusion baseline.
+
+Both learners train only on generated data with fixed seeds; the project ships no pretrained
+weights and makes no claims about real model quality. Model tests carry the `model` and `slow`
+markers: run them with `make test-all` (or `pytest -m model`); they skip cleanly when the extra
+is absent.
