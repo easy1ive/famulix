@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from famulix.memory_graph import MemoryGraph, MemoryNode
 from famulix.retrieval import (
     BM25Index,
@@ -340,3 +342,67 @@ def test_tag_filter_accepts_several_tags_at_once() -> None:
     assert len(both) == 3
     only_home = query_with_filters("budget tag:home", graph=graph, index=index, now_s=200)
     assert len(only_home) == 1
+
+
+from dataclasses import replace  # noqa: E402
+
+from famulix.retrieval import RetrievalResult, apply_reranker  # noqa: E402
+
+
+def _rerank_graph() -> tuple[MemoryGraph, list[str]]:
+    graph = MemoryGraph()
+    ids: list[str] = []
+    for i, text in enumerate(["alpha meeting", "beta deadline", "gamma idea"]):
+        node = MemoryNode.create(kind="fact", title=text, body=text, created_at_s=1000 + i)
+        graph.add_node(node)
+        ids.append(node.node_id)
+    return graph, ids
+
+
+def _results(ids: list[str]) -> list[RetrievalResult]:
+    return [
+        RetrievalResult(node_id=nid, score=1.0 - i * 0.1, citation=f"cite-{i}")
+        for i, nid in enumerate(ids)
+    ]
+
+
+def test_apply_reranker_reorders_and_preserves_set() -> None:
+    graph, ids = _rerank_graph()
+    results = _results(ids)
+    reranked = apply_reranker(results, graph=graph, reranker=lambda hits, _: list(reversed(hits)))
+    assert [r.node_id for r in reranked] == list(reversed(ids))
+    assert {r.node_id for r in reranked} == set(ids)
+
+
+def test_apply_reranker_may_drop_hits() -> None:
+    graph, ids = _rerank_graph()
+    reranked = apply_reranker(_results(ids), graph=graph, reranker=lambda hits, _: hits[:2])
+    assert [r.node_id for r in reranked] == ids[:2]
+
+
+def test_apply_reranker_rejects_invented_and_duplicate_ids() -> None:
+    graph, ids = _rerank_graph()
+    forged = _results(ids) + [RetrievalResult(node_id="evt_missing", score=9.0, citation="x")]
+    with pytest.raises(ValueError, match="invented"):
+        apply_reranker(_results(ids), graph=graph, reranker=lambda hits, _: forged)
+    with pytest.raises(ValueError, match="duplicated"):
+        apply_reranker(_results(ids), graph=graph, reranker=lambda hits, _: hits + hits[:1])
+
+
+def test_apply_reranker_rejects_deactivated_memories() -> None:
+    graph, ids = _rerank_graph()
+    results = _results(ids)
+    node = graph.get_node(ids[1])
+    assert node is not None
+    graph._nodes[ids[1]] = replace(node, is_active=False)  # noqa: SLF001
+    with pytest.raises(ValueError, match="non-active"):
+        apply_reranker(results, graph=graph, reranker=lambda hits, _: hits)
+
+
+def test_apply_reranker_does_not_mutate_input() -> None:
+    graph, ids = _rerank_graph()
+    results = _results(ids)
+    snapshot = list(results)
+    apply_reranker(results, graph=graph, reranker=lambda hits, _: list(reversed(hits)))
+    assert results == snapshot
+    assert [r.node_id for r in results] == ids

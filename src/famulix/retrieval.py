@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from famulix.memory_graph import MemoryGraph, MemoryNode
@@ -353,3 +353,37 @@ def query_with_filters(
         results = tagged
 
     return results[:max_results]
+
+
+Reranker = Callable[[list[RetrievalResult], MemoryGraph], list[RetrievalResult]]
+
+
+def apply_reranker(
+    results: list[RetrievalResult],
+    *,
+    graph: MemoryGraph,
+    reranker: Reranker,
+) -> list[RetrievalResult]:
+    """Apply a pluggable reranker under citation-safety constraints.
+
+    The reranker may reorder or drop hits but can never invent them: every
+    returned id must appear in the input, must still resolve to an active
+    node, and may appear only once. Violations raise ValueError so a learned
+    or scripted reranker cannot smuggle citations to unknown or deleted
+    memories. The input list itself is not mutated.
+    """
+    reranked = reranker(list(results), graph)
+    allowed = {result.node_id for result in results}
+    seen: set[str] = set()
+    output: list[RetrievalResult] = []
+    for result in reranked:
+        if result.node_id not in allowed:
+            raise ValueError(f"reranker invented unknown result: {result.node_id}")
+        if result.node_id in seen:
+            raise ValueError(f"reranker duplicated result: {result.node_id}")
+        node = graph.get_node(result.node_id)
+        if node is None or not node.is_active:
+            raise ValueError(f"reranker returned non-active memory: {result.node_id}")
+        seen.add(result.node_id)
+        output.append(result)
+    return output
