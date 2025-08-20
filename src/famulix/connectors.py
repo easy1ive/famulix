@@ -96,6 +96,26 @@ class ConnectorHub:
             raise ValueError("connector returned an invalid batch checksum")
         return batches
 
+    def collect_partial(self) -> tuple[tuple[ConnectorBatch, ...], tuple[str, ...]]:
+        """Collect tolerating ConnectorError; returns (batches, failed_sources).
+
+        Batches keep deterministic source ordering and are checksum-verified;
+        connector failures are reported per source instead of aborting the
+        sweep. Unexpected exceptions still propagate.
+        """
+        batches: list[ConnectorBatch] = []
+        failed: list[str] = []
+        for connector in self.connectors:
+            try:
+                batch = connector.collect()
+            except ConnectorError:
+                failed.append(connector.source)
+                continue
+            if not batch.verify():
+                raise ValueError("connector returned an invalid batch checksum")
+            batches.append(batch)
+        return tuple(batches), tuple(failed)
+
     def records(self) -> list[ConnectorRecord]:
         by_identity: dict[tuple[str, str], ConnectorRecord] = {}
         for batch in self.collect():
@@ -144,3 +164,37 @@ class ConnectorHub:
                 kind = "file_touch"
             events.append(Event.create(kind, record.timestamp_s, record.source, data))
         return events
+
+
+class ConnectorError(RuntimeError):
+    """Raised when a connector fails during collection."""
+
+    def __init__(self, source: str, message: str = "") -> None:
+        super().__init__(message or f"connector failed: {source}")
+        self.source = source
+
+
+class FlakyConnector:
+    """Deterministic failure injection around a working connector.
+
+    Every ``fail_every``-th call to :meth:`collect` raises ConnectorError.
+    The schedule comes from a call counter — never from wall-clock time or
+    randomness — so tests reproduce the exact failure pattern.
+    """
+
+    def __init__(self, inner: OfflineConnector, fail_every: int = 3) -> None:
+        if fail_every < 2:
+            raise ValueError("fail_every must be at least 2")
+        self.inner = inner
+        self.fail_every = fail_every
+        self.calls = 0
+
+    @property
+    def source(self) -> str:
+        return self.inner.source
+
+    def collect(self) -> ConnectorBatch:
+        self.calls += 1
+        if self.calls % self.fail_every == 0:
+            raise ConnectorError(self.source)
+        return self.inner.collect()
