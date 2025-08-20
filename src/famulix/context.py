@@ -204,3 +204,25 @@ def total_value(items: Sequence[ContextItem], indices: list[int]) -> float:
 
 def total_weight(items: Sequence[ContextItem], indices: list[int]) -> int:
     return sum(items[i].token_estimate for i in indices)
+
+
+def trim_to_budget(items: Sequence[ContextItem], budget: int) -> list[ContextItem]:
+    """Drop the lowest-value items until the sequence fits the budget.
+
+    A conservative fallback for pre-ordered context lists: unlike the
+    knapsack it never reorders survivors or picks a heavier mix, it only
+    removes the least valuable entries (ties broken by item_id) until the
+    total token estimate fits. The result always satisfies
+    ``sum(token_estimate) <= budget``.
+    """
+    _validate_inputs(items, budget)
+    kept = list(items)
+    total = sum(item.token_estimate for item in kept)
+    drop_order = sorted(range(len(kept)), key=lambda i: (kept[i].value, kept[i].item_id))
+    dropped: set[int] = set()
+    for index in drop_order:
+        if total <= budget:
+            break
+        dropped.add(index)
+        total -= kept[index].token_estimate
+    return [item for i, item in enumerate(kept) if i not in dropped]

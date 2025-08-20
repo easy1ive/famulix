@@ -189,3 +189,60 @@ def test_brute_force_knapsack_respects_budget() -> None:
     items = [_item(i, w, float(w)) for i, w in enumerate([3, 5, 7, 11])]
     indices = brute_force_knapsack(items, budget=10)
     assert total_weight(items, indices) <= 10
+
+
+from famulix.context import trim_to_budget  # noqa: E402
+
+
+def _trim_item(item_id: str, tokens: int, value: float) -> ContextItem:
+    return ContextItem(
+        item_id=item_id, token_estimate=tokens, value=value, payload=f"payload {item_id}"
+    )
+
+
+def test_trim_noop_when_within_budget() -> None:
+    items = [_trim_item("a", 10, 0.9), _trim_item("b", 10, 0.5)]
+    assert trim_to_budget(items, 20) == items
+    assert trim_to_budget(items, 21) == items
+
+
+def test_trim_drops_lowest_value_first() -> None:
+    items = [_trim_item("a", 10, 0.2), _trim_item("b", 10, 0.9), _trim_item("c", 10, 0.5)]
+    trimmed = trim_to_budget(items, 20)
+    assert [item.item_id for item in trimmed] == ["b", "c"]
+
+
+def test_trim_ties_break_by_item_id() -> None:
+    items = [_trim_item("z", 10, 0.5), _trim_item("a", 10, 0.5)]
+    trimmed = trim_to_budget(items, 10)
+    assert [item.item_id for item in trimmed] == ["z"]
+
+
+def test_trim_can_return_empty() -> None:
+    items = [_trim_item("a", 50, 0.9)]
+    assert trim_to_budget(items, 10) == []
+    assert trim_to_budget(items, 0) == []
+    assert trim_to_budget([], 10) == []
+
+
+def test_trim_never_exceeds_budget_randomized() -> None:
+    import random
+
+    rng = random.Random(99)
+    for _ in range(200):
+        n = rng.randint(1, 10)
+        items = [_trim_item(f"i{i}", rng.randint(1, 30), round(rng.random(), 3)) for i in range(n)]
+        budget = rng.randint(0, 60)
+        trimmed = trim_to_budget(items, budget)
+        assert sum(item.token_estimate for item in trimmed) <= budget
+        kept_ids = {item.item_id for item in trimmed}
+        assert [item.item_id for item in trimmed] == [
+            item.item_id for item in items if item.item_id in kept_ids
+        ]
+
+
+def test_trim_validates_inputs() -> None:
+    with pytest.raises(ValueError):
+        trim_to_budget([_trim_item("a", -1, 0.5)], 10)
+    with pytest.raises(ValueError):
+        trim_to_budget([_trim_item("a", 5, 0.5)], -1)
