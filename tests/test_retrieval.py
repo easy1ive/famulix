@@ -406,3 +406,66 @@ def test_apply_reranker_does_not_mutate_input() -> None:
     apply_reranker(results, graph=graph, reranker=lambda hits, _: list(reversed(hits)))
     assert results == snapshot
     assert [r.node_id for r in results] == ids
+
+
+def test_bm25_save_load_roundtrip(tmp_path: pytest.TempPathFactory) -> None:
+    idx = BM25Index(k1=1.2, b=0.6)
+    idx.add("d1", "hello world apple banana")
+    idx.add("d2", "banana cherry date")
+    path = tmp_path / "bm25.json"  # type: ignore[operator]
+    idx.save(path)
+    loaded = BM25Index.load(path)
+    assert loaded.k1 == idx.k1
+    assert loaded.b == idx.b
+    assert loaded.docs == idx.docs
+    assert loaded.df == idx.df
+    assert loaded.avgdl == idx.avgdl
+    assert loaded.score("banana") == idx.score("banana")
+
+
+def test_bm25_load_rejects_bad_schema(tmp_path: pytest.TempPathFactory) -> None:
+    import json
+
+    path = tmp_path / "bad.json"  # type: ignore[operator]
+    path.write_text(json.dumps({"schema_version": 99}))
+    with pytest.raises(ValueError, match="schema version"):
+        BM25Index.load(path)
+
+
+def test_bm25_stale_ids_detects_removed_nodes() -> None:
+    idx = BM25Index()
+    idx.add("a", "text one")
+    idx.add("b", "text two")
+    idx.add("c", "text three")
+    assert idx.stale_ids({"a", "b"}) == {"c"}
+    assert idx.stale_ids({"a", "b", "c"}) == set()
+    assert idx.stale_ids(set()) == {"a", "b", "c"}
+
+
+def test_bm25_rebuild_from_graph_reindexes_active_only() -> None:
+    graph = MemoryGraph()
+    active = MemoryNode.create("fact", "active", "active content", created_at_s=100)
+    inactive = MemoryNode.create("fact", "inactive", "inactive content", created_at_s=100)
+    graph.add_node(active)
+    graph.add_node(inactive)
+    from dataclasses import replace
+
+    graph._nodes[inactive.node_id] = replace(inactive, is_active=False)  # noqa: SLF001
+    idx = BM25Index()
+    idx.add("stale_node", "old text that should be gone")
+    count = idx.rebuild_from_graph(graph)
+    assert count == 1
+    assert active.node_id in idx.docs
+    assert inactive.node_id not in idx.docs
+    assert "stale_node" not in idx.docs
+
+
+def test_bm25_prune_stale_removes_dead_entries() -> None:
+    idx = BM25Index()
+    idx.add("live", "still here")
+    idx.add("dead1", "should be removed")
+    idx.add("dead2", "also removed")
+    pruned = idx.prune_stale({"live"})
+    assert pruned == 2
+    assert idx.doc_count == 1
+    assert "live" in idx.docs
