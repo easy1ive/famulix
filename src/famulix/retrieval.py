@@ -6,10 +6,12 @@ Reference: BM25 (Robertson & Zaragoza 2009), MMR diversification
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
 from famulix.memory_graph import MemoryGraph, MemoryNode
 
@@ -121,6 +123,66 @@ class BM25Index:
         """Return the k most frequent terms by document frequency."""
         terms = sorted(self.df.items(), key=lambda pair: (-pair[1], pair[0]))
         return terms[: max(k, 0)]
+
+    def save(self, path: str | Path) -> None:
+        """Persist the index to a JSON file for later reload."""
+        payload = {
+            "schema_version": 1,
+            "k1": self.k1,
+            "b": self.b,
+            "docs": {nid: tokens for nid, tokens in self.docs.items()},
+            "df": dict(self.df),
+            "doc_lens": dict(self._doc_lens),
+            "avgdl": self.avgdl,
+        }
+        Path(path).write_text(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False), encoding="utf-8"
+        )
+
+    @classmethod
+    def load(cls, path: str | Path) -> BM25Index:
+        """Reload a previously saved index. Raises on schema mismatch."""
+        text = Path(path).read_text(encoding="utf-8")
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid BM25 index JSON") from exc
+        if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+            raise ValueError("unsupported BM25 index schema version")
+        required = {"schema_version", "k1", "b", "docs", "df", "doc_lens", "avgdl"}
+        if set(payload) != required:
+            raise ValueError("BM25 index payload has unknown or missing fields")
+        index = cls(k1=float(payload["k1"]), b=float(payload["b"]))
+        index.docs = {str(nid): list(tokens) for nid, tokens in payload["docs"].items()}
+        index.df = {str(term): int(freq) for term, freq in payload["df"].items()}
+        index._doc_lens = {str(nid): int(length) for nid, length in payload["doc_lens"].items()}
+        index.avgdl = float(payload["avgdl"])
+        return index
+
+    def stale_ids(self, live_ids: set[str]) -> set[str]:
+        """Return indexed node ids that are no longer live (deleted or inactive)."""
+        return set(self.docs) - live_ids
+
+    def rebuild_from_graph(self, graph: MemoryGraph) -> int:
+        """Clear and re-index every active node. Returns the count re-indexed."""
+        self.docs.clear()
+        self.df.clear()
+        self._doc_lens.clear()
+        self.avgdl = 0.0
+        count = 0
+        for node in graph.all_nodes():
+            if not node.is_active:
+                continue
+            self.add_node(node)
+            count += 1
+        return count
+
+    def prune_stale(self, live_ids: set[str]) -> int:
+        """Remove entries for nodes that no longer exist. Returns count pruned."""
+        stale = self.stale_ids(live_ids)
+        for nid in stale:
+            self.remove(nid)
+        return len(stale)
 
 
 @dataclass(frozen=True)
