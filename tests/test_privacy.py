@@ -448,3 +448,87 @@ def test_access_decision_from_dict_rejects_extra_and_missing_keys() -> None:
         AccessDecision.from_dict({**base, "effect": "maybe"})
     with pytest.raises(ValueError):
         AccessDecision.from_dict({**base, "allowed": "yes"})
+
+
+def test_policy_wildcard_star_matches_any_action() -> None:
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(id="r1", effect="allow", actions={"*"}, resources={"mem:read"}, tiers=set())
+    )
+    effect, rule_id = engine.evaluate(action="read", resource="mem:read", tier="public")
+    assert effect == "allow"
+    assert rule_id == "r1"
+
+
+def test_policy_wildcard_star_matches_any_resource() -> None:
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(id="r1", effect="allow", actions={"read"}, resources={"*"}, tiers=set())
+    )
+    effect, rule_id = engine.evaluate(action="read", resource="anything", tier="public")
+    assert effect == "allow"
+    assert rule_id == "r1"
+
+
+def test_policy_wildcard_empty_set_matches_all() -> None:
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(id="r1", effect="allow", actions=set(), resources=set(), tiers=set())
+    )
+    effect, rule_id = engine.evaluate(action="write", resource="mem:write", tier="private")
+    assert effect == "allow"
+    assert rule_id == "r1"
+
+
+def test_policy_priority_overrides_wildcard() -> None:
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="allow_all", effect="allow", actions=set(), resources=set(), tiers=set(), priority=0
+        )
+    )
+    engine.add_rule(
+        PolicyRule(
+            id="deny_write",
+            effect="deny",
+            actions={"write"},
+            resources=set(),
+            tiers=set(),
+            priority=10,
+        )
+    )
+    effect, rule_id = engine.evaluate(action="write", resource="mem:write", tier="public")
+    assert effect == "deny"
+    assert rule_id == "deny_write"
+    effect2, rule_id2 = engine.evaluate(action="read", resource="mem:read", tier="public")
+    assert effect2 == "allow"
+    assert rule_id2 == "allow_all"
+
+
+def test_policy_conflict_detection_with_wildcards() -> None:
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="r1", effect="allow", actions={"*"}, resources={"mem:read"}, tiers=set(), priority=5
+        )
+    )
+    engine.add_rule(
+        PolicyRule(
+            id="r2", effect="deny", actions={"read"}, resources={"*"}, tiers=set(), priority=5
+        )
+    )
+    conflicts = engine.check_conflicts()
+    assert len(conflicts) == 1
+    assert set(conflicts[0]) == {"r1", "r2"}
+
+
+def test_policy_engine_rule_helpers() -> None:
+    engine = PolicyEngine()
+    assert engine.rule_count() == 0
+    assert engine.rule_ids() == []
+    engine.add_rule(PolicyRule(id="a", effect="allow", actions=set(), resources=set(), tiers=set()))
+    engine.add_rule(
+        PolicyRule(id="b", effect="deny", actions={"write"}, resources=set(), tiers=set())
+    )
+    assert engine.rule_count() == 2
+    assert set(engine.rule_ids()) == {"a", "b"}

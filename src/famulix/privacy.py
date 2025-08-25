@@ -346,22 +346,34 @@ class PolicyEngine:
         resource: str,
         tier: str,
     ) -> tuple[PolicyEffect, str | None]:
-        """Evaluate a request. Returns (effect, matched_rule_id_or_None)."""
+        """Evaluate a request. Returns (effect, matched_rule_id_or_None).
+
+        Rules are checked in priority order (highest first). Empty match sets
+        act as wildcards (match any value). Explicit "*" in a match set also
+        acts as a wildcard for that dimension.
+        """
         for rule in self._rules:
-            if rule.actions and action not in rule.actions:
+            if rule.actions and "*" not in rule.actions and action not in rule.actions:
                 continue
-            if rule.resources and resource not in rule.resources:
+            if rule.resources and "*" not in rule.resources and resource not in rule.resources:
                 continue
-            if rule.tiers and tier not in rule.tiers:
+            if rule.tiers and "*" not in rule.tiers and tier not in rule.tiers:
                 continue
             return rule.effect, rule.id
         return self.default_effect, None
+
+    def rule_count(self) -> int:
+        return len(self._rules)
+
+    def rule_ids(self) -> list[str]:
+        return [rule.id for rule in self._rules]
 
     def check_conflicts(self) -> list[tuple[str, str]]:
         """Find pairs of rules that could conflict on the same request.
 
         Two rules conflict if they have the same priority, overlapping
-        actions/resources/tiers, and different effects.
+        actions/resources/tiers, and different effects. Wildcards ("*" or
+        empty sets) overlap with everything.
         """
         conflicts: list[tuple[str, str]] = []
         for i in range(len(self._rules)):
@@ -382,5 +394,9 @@ class PolicyEngine:
 
 
 def _sets_overlap(left: set[str], right: set[str]) -> bool:
-    """Empty policy dimensions match every value, as in rule evaluation."""
-    return not left or not right or bool(left & right)
+    """Empty policy dimensions or wildcards match every value."""
+    if not left or not right:
+        return True
+    if "*" in left or "*" in right:
+        return True
+    return bool(left & right)
