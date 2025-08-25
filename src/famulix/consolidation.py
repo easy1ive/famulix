@@ -308,3 +308,55 @@ def consolidate_graph(
         resolved_keys.add(key)
 
     return report
+
+
+def summarize_episodes(
+    graph: MemoryGraph,
+    episodes: list[MemoryNode],
+    *,
+    template: str = "Day summary covering {count} events: {topics}",
+) -> MemoryNode | None:
+    """Generate a template-based summary node for a group of episodes.
+
+    The summary cites the episodes it covers via 'derived_from' edges. Returns
+    None if the episode list is empty. The summary is added to the graph.
+    """
+    if not episodes:
+        return None
+    active = [ep for ep in episodes if ep.is_active]
+    if not active:
+        return None
+    topics = ", ".join(sorted({ep.title for ep in active})[:5])
+    body = template.format(count=len(active), topics=topics)
+    title = f"summary_{active[0].created_at_s}"
+    summary = MemoryNode.create(
+        kind="episode",
+        title=title,
+        body=body,
+        created_at_s=max(ep.created_at_s for ep in active),
+        metadata={"summary": "true", "source_count": str(len(active))},
+    )
+    graph.add_node(summary)
+    for ep in active:
+        graph.add_edge(MemoryEdge.create(summary.node_id, ep.node_id, "derived_from"))
+    return summary
+
+
+def consolidate_with_summaries(
+    graph: MemoryGraph,
+    *,
+    dedup_threshold: float = 0.85,
+    episode_groups: dict[str, list[MemoryNode]] | None = None,
+) -> ConsolidationReport:
+    """Full consolidation pass including optional episode summary generation.
+
+    Runs dedup, contradiction resolution, then generates summaries for each
+    provided episode group.
+    """
+    report = consolidate_graph(graph, dedup_threshold=dedup_threshold)
+    if episode_groups:
+        for _key, episodes in episode_groups.items():
+            summary = summarize_episodes(graph, episodes)
+            if summary is not None:
+                report.summary_nodes.append(summary.node_id)
+    return report

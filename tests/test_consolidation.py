@@ -355,3 +355,68 @@ def test_shared_char_count_is_symmetric_and_bounded() -> None:
 def test_empty_texts_never_pass_the_character_bound() -> None:
     assert not _chars_can_reach(Counter(""), Counter(""), 0, 0.5)
     assert not _chars_can_reach(Counter(""), Counter("abc"), 3, 0.5)
+
+
+def test_summarize_episodes_creates_derived_from_edges() -> None:
+    from famulix.consolidation import summarize_episodes
+
+    graph = MemoryGraph()
+    eps = [
+        MemoryNode.create("episode", "morning run", "ran 5km", created_at_s=100),
+        MemoryNode.create("episode", "lunch meeting", "discussed project", created_at_s=200),
+        MemoryNode.create("episode", "evening reading", "read chapter 3", created_at_s=300),
+    ]
+    for ep in eps:
+        graph.add_node(ep)
+    summary = summarize_episodes(graph, eps)
+    assert summary is not None
+    assert summary.kind == "episode"
+    assert "3 events" in summary.body
+    assert graph.has_node(summary.node_id)
+    out_edges = graph.out_edges(summary.node_id)
+    derived = [e for e in out_edges if e.kind == "derived_from"]
+    assert len(derived) == 3
+    derived_targets = {e.to_id for e in derived}
+    assert derived_targets == {ep.node_id for ep in eps}
+
+
+def test_summarize_episodes_returns_none_for_empty_input() -> None:
+    from famulix.consolidation import summarize_episodes
+
+    graph = MemoryGraph()
+    assert summarize_episodes(graph, []) is None
+
+
+def test_summarize_episodes_skips_inactive() -> None:
+    from dataclasses import replace
+
+    from famulix.consolidation import summarize_episodes
+
+    graph = MemoryGraph()
+    active = MemoryNode.create("episode", "active event", "content", created_at_s=100)
+    inactive = MemoryNode.create("episode", "inactive event", "old content", created_at_s=50)
+    graph.add_node(active)
+    graph.add_node(inactive)
+    graph._nodes[inactive.node_id] = replace(inactive, is_active=False)  # noqa: SLF001
+    inactive_updated = graph.get_node(inactive.node_id)
+    assert inactive_updated is not None
+    summary = summarize_episodes(graph, [active, inactive_updated])
+    assert summary is not None
+    out_edges = graph.out_edges(summary.node_id)
+    derived_targets = {e.to_id for e in out_edges if e.kind == "derived_from"}
+    assert derived_targets == {active.node_id}
+
+
+def test_consolidate_with_summaries_records_summary_nodes() -> None:
+    from famulix.consolidation import consolidate_with_summaries
+
+    graph = MemoryGraph()
+    eps = [
+        MemoryNode.create("episode", "event a", "detail a", created_at_s=100),
+        MemoryNode.create("episode", "event b", "detail b", created_at_s=200),
+    ]
+    for ep in eps:
+        graph.add_node(ep)
+    report = consolidate_with_summaries(graph, episode_groups={"day1": eps})
+    assert len(report.summary_nodes) == 1
+    assert graph.has_node(report.summary_nodes[0])
