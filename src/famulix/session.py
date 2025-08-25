@@ -170,7 +170,37 @@ class SessionRecorder:
 
 
 def session_diff(a: SessionRecorder, b: SessionRecorder) -> dict[str, Any]:
-    """Compare two sessions and report differences."""
+    """Compare two sessions and report differences.
+
+    Returns a dict with digest comparison, length info, first difference index,
+    and field-level differences for the first N mismatched frames.
+    """
+    first_diff_index = next(
+        (
+            index
+            for index, (left, right) in enumerate(zip(a.entries, b.entries, strict=False))
+            if left != right
+        ),
+        min(len(a.entries), len(b.entries)) if len(a.entries) != len(b.entries) else None,
+    )
+
+    field_diffs: list[dict[str, Any]] = []
+    if first_diff_index is not None:
+        max_detail_frames = 5
+        for idx in range(first_diff_index, min(len(a.entries), len(b.entries))):
+            if len(field_diffs) >= max_detail_frames:
+                break
+            left, right = a.entries[idx], b.entries[idx]
+            if left == right:
+                continue
+            frame_diff: dict[str, Any] = {"frame_index": idx, "fields": []}
+            for key in set(left) | set(right):
+                left_val = left.get(key)
+                right_val = right.get(key)
+                if left_val != right_val:
+                    frame_diff["fields"].append({"field": key, "a": left_val, "b": right_val})
+            field_diffs.append(frame_diff)
+
     return {
         "a_digest": a.digest(),
         "b_digest": b.digest(),
@@ -178,12 +208,6 @@ def session_diff(a: SessionRecorder, b: SessionRecorder) -> dict[str, Any]:
         "a_length": len(a.entries),
         "b_length": len(b.entries),
         "length_diff": len(a.entries) - len(b.entries),
-        "first_difference": next(
-            (
-                index
-                for index, (left, right) in enumerate(zip(a.entries, b.entries, strict=False))
-                if left != right
-            ),
-            min(len(a.entries), len(b.entries)) if len(a.entries) != len(b.entries) else None,
-        ),
+        "first_difference": first_diff_index,
+        "field_differences": field_diffs,
     }
