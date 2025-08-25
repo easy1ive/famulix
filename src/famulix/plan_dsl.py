@@ -26,6 +26,8 @@ class PlanStep:
     effects: list[str] = field(default_factory=list)
     timeout_s: float = 5.0
     budget: float = 0.0
+    output_types: dict[str, str] = field(default_factory=dict)
+    input_types: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +39,8 @@ class PlanStep:
             "effects": self.effects,
             "timeout_s": self.timeout_s,
             "budget": self.budget,
+            "output_types": self.output_types,
+            "input_types": self.input_types,
         }
 
 
@@ -98,6 +102,8 @@ class Plan:
             "effects",
             "timeout_s",
             "budget",
+            "output_types",
+            "input_types",
         }
         steps: list[PlanStep] = []
         for raw in data["steps"]:
@@ -117,6 +123,14 @@ class Plan:
                 float,
             ):
                 raise ValueError("plan step numeric limits must be numbers")
+            for type_field in ("output_types", "input_types"):
+                if not isinstance(raw[type_field], dict):
+                    raise ValueError(f"plan step {type_field} must be an object")
+                if any(
+                    not isinstance(key, str) or not isinstance(value, str)
+                    for key, value in raw[type_field].items()
+                ):
+                    raise ValueError(f"plan step {type_field} values must be strings")
             steps.append(PlanStep(**raw))
         return cls(
             plan_id=data["plan_id"],
@@ -221,6 +235,36 @@ def validate_plan(plan: Plan) -> ValidationResult:
         warnings.append("no entry point (all steps have dependencies)")
 
     return ValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
+
+
+def check_step_types(plan: Plan) -> list[str]:
+    """Validate that step input types match dependency output types.
+
+    Returns a list of type mismatch errors. Empty list means all types match.
+    """
+    errors: list[str] = []
+    step_map = {step.id: step for step in plan.steps}
+
+    for step in plan.steps:
+        if not step.input_types:
+            continue
+        for input_name, expected_type in step.input_types.items():
+            provider_type: str | None = None
+            for dep_id in step.depends_on:
+                dep_step = step_map.get(dep_id)
+                if dep_step and input_name in dep_step.output_types:
+                    provider_type = dep_step.output_types[input_name]
+                    break
+            if provider_type is None:
+                errors.append(
+                    f"step {step.id}: input '{input_name}' has no provider in dependencies"
+                )
+            elif provider_type != expected_type:
+                errors.append(
+                    f"step {step.id}: input '{input_name}' expects {expected_type}, "
+                    f"but dependency provides {provider_type}"
+                )
+    return errors
 
 
 def topological_order(plan: Plan) -> list[str]:

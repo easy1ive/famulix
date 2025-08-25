@@ -180,8 +180,8 @@ def test_plan_json_roundtrip_has_versioned_golden_shape() -> None:
     expected = (
         '{"metadata":{},"plan_id":"daily","schema_version":1,'
         '"steps":[{"budget":0.0,"depends_on":[],"effects":[],"id":"read",'
-        '"inputs":{"text":"hi"},"preconditions":[],"timeout_s":5.0,"tool":"echo"}],'
-        '"version":1}'
+        '"input_types":{},"inputs":{"text":"hi"},"output_types":{},"preconditions":[],'
+        '"timeout_s":5.0,"tool":"echo"}],"version":1}'
     )
     assert payload == expected
     assert Plan.from_json(payload).to_json() == payload
@@ -266,3 +266,75 @@ def test_plan_tools_used_collects_unique_tools() -> None:
     tools = plan.tools_used()
     assert tools == {"echo", "add"}
     assert len(tools) == 2
+
+
+def test_check_step_types_passes_with_matching_types() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, check_step_types
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(
+                id="producer",
+                tool="fetch",
+                output_types={"data": "string"},
+            ),
+            PlanStep(
+                id="consumer",
+                tool="process",
+                depends_on=["producer"],
+                input_types={"data": "string"},
+            ),
+        ],
+    )
+    errors = check_step_types(plan)
+    assert errors == []
+
+
+def test_check_step_types_detects_mismatch() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, check_step_types
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(
+                id="producer",
+                tool="fetch",
+                output_types={"data": "string"},
+            ),
+            PlanStep(
+                id="consumer",
+                tool="process",
+                depends_on=["producer"],
+                input_types={"data": "integer"},
+            ),
+        ],
+    )
+    errors = check_step_types(plan)
+    assert len(errors) == 1
+    assert "expects integer" in errors[0]
+    assert "provides string" in errors[0]
+
+
+def test_check_step_types_detects_missing_provider() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, check_step_types
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(
+                id="producer",
+                tool="fetch",
+                output_types={"result": "string"},
+            ),
+            PlanStep(
+                id="consumer",
+                tool="process",
+                depends_on=["producer"],
+                input_types={"data": "string"},
+            ),
+        ],
+    )
+    errors = check_step_types(plan)
+    assert len(errors) == 1
+    assert "no provider" in errors[0]
