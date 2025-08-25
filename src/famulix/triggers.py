@@ -33,6 +33,7 @@ class TriggerConfig:
     quiet_hours_start: int = 22  # hour of day
     quiet_hours_end: int = 8  # hour of day
     max_triggers_per_day: int = 20
+    dedupe_window_seconds: int = 1800  # suppress duplicate triggers within this window
 
 
 @dataclass
@@ -158,6 +159,16 @@ def generate_triggers(
                     memory_id=node.node_id,
                     action="suppressed",
                     reason="cooldown",
+                )
+            continue
+        if previous is not None and now_s - previous < cfg.dedupe_window_seconds:
+            if log is not None:
+                log.record(
+                    timestamp_s=now_s,
+                    trigger_id=f"trig_{node.node_id}",
+                    memory_id=node.node_id,
+                    action="suppressed",
+                    reason="dedupe window",
                 )
             continue
         # Compute trigger time: proportional to salience — higher salience → sooner

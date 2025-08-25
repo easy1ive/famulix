@@ -137,3 +137,31 @@ def test_trigger_log_clear_removes_entries() -> None:
     log.clear()
     assert log.entry_count() == 0
     assert log.action_summary() == {}
+
+
+def test_trigger_dedupe_window_suppresses_recent_fires() -> None:
+    from famulix.triggers import TriggerConfig, TriggerLog, generate_triggers
+
+    graph = MemoryGraph()
+    node = MemoryNode.create("fact", "important", "high salience content", created_at_s=1000)
+    graph.add_node(node)
+    log = TriggerLog()
+    log.record(timestamp_s=1000, trigger_id="trig_1", memory_id=node.node_id, action="generated")
+    config = TriggerConfig(salience_threshold=0.1, cooldown_seconds=0, dedupe_window_seconds=3600)
+    triggers = generate_triggers(graph, now_s=2000, config=config, log=log)
+    assert triggers == []
+    suppressed = log.count_by_action("suppressed")
+    assert suppressed >= 1
+
+
+def test_trigger_dedupe_window_allows_after_expiry() -> None:
+    from famulix.triggers import TriggerConfig, TriggerLog, generate_triggers
+
+    graph = MemoryGraph()
+    node = MemoryNode.create("fact", "important", "high salience content", created_at_s=1000)
+    graph.add_node(node)
+    log = TriggerLog()
+    log.record(timestamp_s=1000, trigger_id="trig_1", memory_id=node.node_id, action="generated")
+    config = TriggerConfig(salience_threshold=0.1, cooldown_seconds=0, dedupe_window_seconds=600)
+    triggers = generate_triggers(graph, now_s=2000, config=config, log=log)
+    assert len(triggers) >= 1
