@@ -240,3 +240,53 @@ def test_kinds_seen_counts_each_kind() -> None:
     assert counts["recall"] == 1
     assert counts["decision"] == 1
     assert sum(counts.values()) == rec.entry_count()
+
+
+def test_session_diff_reports_field_level_differences() -> None:
+    from famulix.session import SessionRecorder, session_diff
+
+    a = SessionRecorder(session_id="s1", seed=42)
+    a.record("event", {"key": "value1"}, timestamp_s=100)
+    a.record("event", {"key": "value2"}, timestamp_s=200)
+
+    b = SessionRecorder(session_id="s1", seed=42)
+    b.record("event", {"key": "value1"}, timestamp_s=100)
+    b.record("event", {"key": "different"}, timestamp_s=200)
+
+    diff = session_diff(a, b)
+    assert not diff["identical"]
+    assert diff["first_difference"] == 1
+    assert len(diff["field_differences"]) >= 1
+    frame_diff = diff["field_differences"][0]
+    assert frame_diff["frame_index"] == 1
+    assert any(fd["field"] == "payload" for fd in frame_diff["fields"])
+
+
+def test_session_diff_identical_sessions_have_no_field_diffs() -> None:
+    from famulix.session import SessionRecorder, session_diff
+
+    a = SessionRecorder(session_id="s1", seed=42)
+    a.record("event", {"data": "same"}, timestamp_s=100)
+
+    b = SessionRecorder(session_id="s1", seed=42)
+    b.record("event", {"data": "same"}, timestamp_s=100)
+
+    diff = session_diff(a, b)
+    assert diff["identical"]
+    assert diff["field_differences"] == []
+
+
+def test_session_diff_handles_length_mismatch() -> None:
+    from famulix.session import SessionRecorder, session_diff
+
+    a = SessionRecorder(session_id="s1", seed=42)
+    a.record("event", {"data": "one"}, timestamp_s=100)
+
+    b = SessionRecorder(session_id="s1", seed=42)
+    b.record("event", {"data": "one"}, timestamp_s=100)
+    b.record("event", {"data": "two"}, timestamp_s=200)
+
+    diff = session_diff(a, b)
+    assert not diff["identical"]
+    assert diff["length_diff"] == -1
+    assert diff["first_difference"] == 1
