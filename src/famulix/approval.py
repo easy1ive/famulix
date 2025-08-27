@@ -111,3 +111,33 @@ class ApprovalQueue:
 
     def has_pending(self) -> bool:
         return any(r.status == "pending" for r in self.requests)
+
+    def escalate(self, request_id: str, now_s: int) -> bool:
+        """Escalate a request to the next approver in its chain.
+
+        Returns True if escalation succeeded, False if no chain or at end.
+        """
+        req = self.get(request_id)
+        if req is None or req.status != "pending":
+            return False
+        chain = self.escalation_chains.get(req.action, [])
+        if not chain or req.escalation_level >= len(chain):
+            return False
+        next_approver = chain[req.escalation_level]
+        req.escalation_level += 1
+        req.approver = next_approver
+        return True
+
+    def expired_count(self) -> int:
+        return sum(1 for r in self.requests if r.status == "expired")
+
+    def escalated_count(self) -> int:
+        return sum(1 for r in self.requests if r.escalation_level > 0)
+
+    def average_decision_time(self) -> float:
+        """Compute average time from creation to decision for decided requests."""
+        decided = [r for r in self.requests if r.decided_at_s is not None and r.created_at_s > 0]
+        if not decided:
+            return 0.0
+        total = sum(r.decided_at_s - r.created_at_s for r in decided)  # type: ignore[operator]
+        return round(total / len(decided), 6)
