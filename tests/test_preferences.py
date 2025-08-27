@@ -212,3 +212,64 @@ def test_entries_for_key_filters_correctly() -> None:
     assert len(p.entries_for_key("tone")) == 2
     assert len(p.entries_for_key("length")) == 1
     assert len(p.entries_for_key("nonexistent")) == 0
+
+
+def test_preference_profile_cold_start_returns_empty() -> None:
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile()
+    prefs = profile.current_preferences(now_s=1000)
+    assert prefs == {}
+    assert profile.entry_count() == 0
+    assert profile.preference_keys() == set()
+
+
+def test_preference_profile_single_signal_below_threshold() -> None:
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile()
+    profile.add_feedback("format", "concise", "up", timestamp_s=1000, confidence=0.3)
+    prefs = profile.current_preferences(now_s=1000, min_confidence=0.5)
+    assert prefs == {}
+    prefs_low = profile.current_preferences(now_s=1000, min_confidence=0.1)
+    assert "format" in prefs_low
+
+
+def test_preference_profile_decay_reduces_confidence_over_time() -> None:
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile(decay_half_life_s=86400)
+    profile.add_feedback("tone", "formal", "up", timestamp_s=0, confidence=1.0)
+    prefs_now = profile.current_preferences(now_s=0, min_confidence=0.0)
+    prefs_later = profile.current_preferences(now_s=86400, min_confidence=0.0)
+    assert "tone" in prefs_now
+    assert "tone" in prefs_later
+    assert prefs_later["tone"][1] < prefs_now["tone"][1]
+
+
+def test_preference_profile_contradictory_signals_resolve_to_dominant() -> None:
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile(decay_half_life_s=86400 * 365)
+    for _ in range(5):
+        profile.add_feedback("length", "short", "up", timestamp_s=1000, confidence=0.8)
+    for _ in range(2):
+        profile.add_feedback("length", "long", "up", timestamp_s=1000, confidence=0.8)
+    prefs = profile.current_preferences(now_s=1000, min_confidence=0.0)
+    assert prefs["length"][0] == "short"
+
+
+def test_preference_profile_rejects_invalid_inputs() -> None:
+    import pytest
+
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile()
+    with pytest.raises(ValueError, match="non-empty"):
+        profile.add_feedback("", "value", "up", timestamp_s=100)
+    with pytest.raises(ValueError, match="non-negative"):
+        profile.add_feedback("key", "value", "up", timestamp_s=-1)
+    with pytest.raises(ValueError, match="finite"):
+        profile.add_feedback("key", "value", "up", timestamp_s=100, confidence=float("nan"))
+    with pytest.raises(ValueError, match="\\[0, 1\\]"):
+        profile.add_feedback("key", "value", "up", timestamp_s=100, confidence=1.5)
