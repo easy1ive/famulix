@@ -246,3 +246,67 @@ def test_trim_validates_inputs() -> None:
         trim_to_budget([_trim_item("a", -1, 0.5)], 10)
     with pytest.raises(ValueError):
         trim_to_budget([_trim_item("a", 5, 0.5)], -1)
+
+
+def test_assemble_context_orders_by_descending_value() -> None:
+    from famulix.context import ContextItem, assemble_context
+
+    items = [
+        ContextItem(item_id="low", token_estimate=10, value=0.3, payload="low value"),
+        ContextItem(item_id="high", token_estimate=10, value=0.9, payload="high value"),
+        ContextItem(item_id="mid", token_estimate=10, value=0.6, payload="mid value"),
+    ]
+    result = assemble_context(items, budget=100)
+    assert result.items[0].item_id == "high"
+    assert result.items[1].item_id == "mid"
+    assert result.items[2].item_id == "low"
+
+
+def test_assemble_context_budget_adherence_across_sizes() -> None:
+    import random
+
+    from famulix.context import ContextItem, assemble_context
+
+    rng = random.Random(42)
+    items = [
+        ContextItem(
+            item_id=f"item_{i}",
+            token_estimate=rng.randint(5, 50),
+            value=rng.random(),
+            payload=f"content {i}",
+        )
+        for i in range(20)
+    ]
+    for budget in [10, 50, 100, 200, 500]:
+        result = assemble_context(items, budget=budget)
+        assert result.total_tokens <= budget
+        assert result.within_budget
+
+
+def test_assemble_context_dp_beats_greedy_on_tight_budgets() -> None:
+    from famulix.context import ContextItem, assemble_context
+
+    items = [
+        ContextItem(item_id="a", token_estimate=30, value=0.8, payload="a"),
+        ContextItem(item_id="b", token_estimate=25, value=0.7, payload="b"),
+        ContextItem(item_id="c", token_estimate=20, value=0.6, payload="c"),
+        ContextItem(item_id="d", token_estimate=15, value=0.5, payload="d"),
+    ]
+    dp_result = assemble_context(items, budget=50, use_dp=True)
+    greedy_result = assemble_context(items, budget=50, use_dp=False)
+    assert dp_result.total_value >= greedy_result.total_value
+
+
+def test_trim_to_budget_drops_lowest_value_first() -> None:
+    from famulix.context import ContextItem, trim_to_budget
+
+    items = [
+        ContextItem(item_id="high", token_estimate=20, value=0.9, payload="high"),
+        ContextItem(item_id="low", token_estimate=20, value=0.1, payload="low"),
+        ContextItem(item_id="mid", token_estimate=20, value=0.5, payload="mid"),
+    ]
+    kept = trim_to_budget(items, budget=40)
+    kept_ids = {item.item_id for item in kept}
+    assert "low" not in kept_ids
+    assert "high" in kept_ids
+    assert sum(item.token_estimate for item in kept) <= 40
