@@ -451,3 +451,80 @@ def test_receipt_from_dict_accepts_int_and_float_durations() -> None:
         payload = dict(_receipt_payload())
         payload["duration_s"] = duration
         assert ToolResult.from_dict(payload).duration_s == float(duration)
+
+
+def test_tool_registry_idempotency_key_tracking() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry()
+    spec = ToolSpec(
+        name="write_tool",
+        description="A write tool",
+        parameters={
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
+        },
+        side_effect_class="write",
+        idempotent=True,
+    )
+    registry.register(spec, lambda value: {"result": value})
+    assert registry.idempotency_key_count() == 0
+    registry.execute("write_tool", {"value": "test"}, idempotency_key="key1")
+    assert registry.idempotency_key_count() == 1
+    assert registry.has_idempotency_key("write_tool", "key1")
+    assert not registry.has_idempotency_key("write_tool", "key2")
+
+
+def test_tool_registry_idempotency_replay_returns_same_result() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    call_count = 0
+
+    def handler(value: str) -> dict[str, str]:
+        nonlocal call_count
+        call_count += 1
+        return {"result": value, "call": str(call_count)}
+
+    registry = ToolRegistry()
+    spec = ToolSpec(
+        name="write_tool",
+        description="A write tool",
+        parameters={
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
+        },
+        side_effect_class="write",
+        idempotent=True,
+    )
+    registry.register(spec, handler)
+    result1 = registry.execute("write_tool", {"value": "test"}, idempotency_key="key1")
+    result2 = registry.execute("write_tool", {"value": "test"}, idempotency_key="key1")
+    assert call_count == 1
+    assert result1.output == result2.output
+    assert result1.success and result2.success
+
+
+def test_tool_registry_clear_idempotency_cache() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry()
+    spec = ToolSpec(
+        name="write_tool",
+        description="A write tool",
+        parameters={
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
+        },
+        side_effect_class="write",
+        idempotent=True,
+    )
+    registry.register(spec, lambda value: {"result": value})
+    registry.execute("write_tool", {"value": "test1"}, idempotency_key="key1")
+    registry.execute("write_tool", {"value": "test2"}, idempotency_key="key2")
+    assert registry.idempotency_key_count() == 2
+    cleared = registry.clear_idempotency_cache()
+    assert cleared == 2
+    assert registry.idempotency_key_count() == 0

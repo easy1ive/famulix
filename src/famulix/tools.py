@@ -229,6 +229,20 @@ class ToolRegistry:
             counts[key] = counts.get(key, 0) + 1
         return counts
 
+    def idempotency_key_count(self) -> int:
+        """Return the number of cached idempotency keys."""
+        return len(self._idempotency_cache)
+
+    def has_idempotency_key(self, tool_name: str, key: str) -> bool:
+        """Check if a specific idempotency key has been used."""
+        return f"{tool_name}:{key}" in self._idempotency_cache
+
+    def clear_idempotency_cache(self) -> int:
+        """Clear all cached idempotency keys. Returns count cleared."""
+        count = len(self._idempotency_cache)
+        self._idempotency_cache.clear()
+        return count
+
     def preflight(
         self,
         name: str,
