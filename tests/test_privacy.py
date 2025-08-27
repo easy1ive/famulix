@@ -532,3 +532,51 @@ def test_policy_engine_rule_helpers() -> None:
     )
     assert engine.rule_count() == 2
     assert set(engine.rule_ids()) == {"a", "b"}
+
+
+def test_redaction_reversible_roundtrip_preserves_all_pii() -> None:
+    text = "Email: alice@example.com, Phone: 555-123-4567, Card: 4111 1111 1111 1111"
+    redacted, mapping = redact_text(text, mode="reversible", salt="test")
+    restored = restore_text(redacted, mapping)
+    assert restored == text
+    assert "alice@example.com" in restored
+    assert "555-123-4567" in restored
+    assert "4111 1111 1111 1111" in restored
+
+
+def test_redaction_irreversible_cannot_be_restored() -> None:
+    text = "Contact alice@example.com for details"
+    redacted, mapping = redact_text(text, mode="irreversible")
+    assert mapping == {}
+    assert "alice@example.com" not in redacted
+    assert "[EMAIL]" in redacted
+    restored = restore_text(redacted, mapping)
+    assert restored == redacted
+    assert "alice@example.com" not in restored
+
+
+def test_redaction_reversible_with_multiple_same_type_pii() -> None:
+    text = "Send to alice@example.com and bob@example.com"
+    redacted, mapping = redact_text(text, mode="reversible", salt="multi")
+    assert len(mapping) == 2
+    restored = restore_text(redacted, mapping)
+    assert restored == text
+    assert "alice@example.com" in restored
+    assert "bob@example.com" in restored
+
+
+def test_redaction_deterministic_with_same_salt() -> None:
+    text = "Email: test@example.com"
+    redacted1, mapping1 = redact_text(text, mode="reversible", salt="fixed")
+    redacted2, mapping2 = redact_text(text, mode="reversible", salt="fixed")
+    assert redacted1 == redacted2
+    assert mapping1 == mapping2
+
+
+def test_redaction_different_salt_produces_different_tokens() -> None:
+    text = "Email: test@example.com"
+    redacted1, mapping1 = redact_text(text, mode="reversible", salt="salt1")
+    redacted2, mapping2 = redact_text(text, mode="reversible", salt="salt2")
+    assert redacted1 != redacted2
+    assert list(mapping1.values()) == list(mapping2.values())
+    assert list(mapping1.keys()) != list(mapping2.keys())
