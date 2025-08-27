@@ -156,3 +156,89 @@ def test_approval_queue_count_helpers() -> None:
     assert q.total_count() == 2
     assert q.pending_count() == 0
     assert q.has_pending() is False
+
+
+def test_approval_escalation_chain_moves_to_next_approver() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    queue = ApprovalQueue()
+    queue.escalation_chains["sensitive_action"] = ["manager", "director", "vp"]
+    req = ApprovalRequest(
+        request_id="r1",
+        requester="user",
+        action="sensitive_action",
+        resource="data",
+        created_at_s=100,
+        expires_at_s=1000,
+    )
+    queue.submit(req)
+    assert queue.escalate("r1", now_s=200)
+    updated = queue.get("r1")
+    assert updated is not None
+    assert updated.escalation_level == 1
+    assert updated.approver == "manager"
+    assert queue.escalate("r1", now_s=300)
+    updated2 = queue.get("r1")
+    assert updated2 is not None
+    assert updated2.escalation_level == 2
+    assert updated2.approver == "director"
+
+
+def test_approval_escalation_stops_at_chain_end() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    queue = ApprovalQueue()
+    queue.escalation_chains["action"] = ["level1"]
+    req = ApprovalRequest(
+        request_id="r1",
+        requester="user",
+        action="action",
+        resource="res",
+        created_at_s=100,
+    )
+    queue.submit(req)
+    assert queue.escalate("r1", now_s=200)
+    assert not queue.escalate("r1", now_s=300)
+    updated = queue.get("r1")
+    assert updated is not None
+    assert updated.escalation_level == 1
+
+
+def test_approval_expired_and_escalated_counts() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    queue = ApprovalQueue()
+    req1 = ApprovalRequest(
+        request_id="r1", requester="u", action="a", resource="r", created_at_s=100, expires_at_s=200
+    )
+    req2 = ApprovalRequest(
+        request_id="r2",
+        requester="u",
+        action="b",
+        resource="r",
+        created_at_s=100,
+        escalation_level=2,
+    )
+    queue.submit(req1)
+    queue.submit(req2)
+    queue.expire_stale(now_s=300)
+    assert queue.expired_count() == 1
+    assert queue.escalated_count() == 1
+
+
+def test_approval_average_decision_time() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    queue = ApprovalQueue()
+    req1 = ApprovalRequest(
+        request_id="r1", requester="u", action="a", resource="r", created_at_s=100
+    )
+    req2 = ApprovalRequest(
+        request_id="r2", requester="u", action="b", resource="r", created_at_s=200
+    )
+    queue.submit(req1)
+    queue.submit(req2)
+    queue.decide("r1", "approved", "admin", decided_at_s=150)
+    queue.decide("r2", "denied", "admin", decided_at_s=300)
+    avg = queue.average_decision_time()
+    assert avg == 75.0
