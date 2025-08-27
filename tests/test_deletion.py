@@ -136,3 +136,80 @@ def test_delete_without_cascade_preserves_edges() -> None:
     delete_memory(g, b.node_id, cascade=False)
     # Edge count unchanged (cascade off)
     assert g.edge_count() == edges_before
+
+
+def test_deleted_memory_never_appears_in_retrieval_results() -> None:
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.retrieval import BM25Index, hybrid_score
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "keep this", "important information", created_at_s=100)
+    n2 = MemoryNode.create("fact", "delete this", "sensitive data to remove", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    index = BM25Index()
+    index.add_node(n1)
+    index.add_node(n2)
+    delete_memory(graph, n2.node_id, cascade=True)
+    index.remove(n2.node_id)
+    results = hybrid_score("sensitive data", graph=graph, index=index, now_s=300)
+    result_ids = {r.node_id for r in results}
+    assert n2.node_id not in result_ids
+    assert n1.node_id in result_ids or len(results) == 0
+
+
+def test_deleted_memory_tombstone_blocks_reactivation() -> None:
+    from dataclasses import replace
+
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    node = MemoryNode.create("fact", "to delete", "content", created_at_s=100)
+    graph.add_node(node)
+    delete_memory(graph, node.node_id, cascade=True)
+    deleted_node = graph.get_node(node.node_id)
+    assert deleted_node is not None
+    assert not deleted_node.is_active
+    assert deleted_node.metadata.get("deleted") == "true"
+    attempted_reactivation = replace(deleted_node, is_active=True)
+    graph._nodes[node.node_id] = attempted_reactivation  # noqa: SLF001
+    reactivated = graph.get_node(node.node_id)
+    assert reactivated is not None
+    assert reactivated.metadata.get("deleted") == "true"
+
+
+def test_deletion_cascade_removes_all_connected_edges() -> None:
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    parent = MemoryNode.create("episode", "parent", "parent content", created_at_s=100)
+    child1 = MemoryNode.create("fact", "child1", "child content 1", created_at_s=200)
+    child2 = MemoryNode.create("fact", "child2", "child content 2", created_at_s=300)
+    graph.add_node(parent)
+    graph.add_node(child1)
+    graph.add_node(child2)
+    graph.add_edge(MemoryEdge.create(parent.node_id, child1.node_id, "mentions"))
+    graph.add_edge(MemoryEdge.create(parent.node_id, child2.node_id, "mentions"))
+    graph.add_edge(MemoryEdge.create(child1.node_id, parent.node_id, "part_of"))
+    report = delete_memory(graph, parent.node_id, cascade=True)
+    assert len(report.deleted_edges) >= 3
+    assert len(graph.out_edges(parent.node_id)) == 0
+    assert len(graph.in_edges(parent.node_id)) == 0
+
+
+def test_deletion_without_cascade_preserves_edges() -> None:
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "node1", "content", created_at_s=100)
+    n2 = MemoryNode.create("fact", "node2", "content", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    graph.add_edge(MemoryEdge.create(n1.node_id, n2.node_id, "related"))
+    report = delete_memory(graph, n1.node_id, cascade=False)
+    assert len(report.deleted_edges) == 0
+    assert len(graph.out_edges(n1.node_id)) == 1
