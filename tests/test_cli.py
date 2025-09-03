@@ -251,3 +251,58 @@ def test_prefs_command(capsys):
 def test_triggers_command(capsys):
     rc = main(["triggers", "--days", "3"])
     assert rc == 0
+
+
+def test_cli_unknown_subcommand_exits_with_error() -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "famulix.cli", "nonexistent_command"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+
+
+def test_cli_help_exits_cleanly() -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "famulix.cli", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "famulix" in result.stdout.lower() or "usage" in result.stdout.lower()
+
+
+def test_cli_ingest_requires_path_argument() -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "famulix.cli", "ingest"],
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        result.returncode != 0
+        or "required" in result.stderr.lower()
+        or "error" in result.stderr.lower()
+    )
+
+
+def test_cli_demo_runs_end_to_end() -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "famulix.cli", "demo"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0
+    assert len(result.stdout) > 0
