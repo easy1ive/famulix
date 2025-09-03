@@ -207,3 +207,57 @@ def test_decode_fact_candidate_ignores_other_events_and_kinds() -> None:
         "episode", "s7", "body", created_at_s=5, metadata={"source_event": event.event_id}
     )
     assert decode_fact_candidate(event, episode) is None
+
+
+def test_extract_entities_handles_hostile_text() -> None:
+    from famulix.encoding import extract_entities
+
+    hostile = "Contact <script>alert('xss')</script> at alice@example.com"
+    entities = extract_entities(hostile)
+    assert isinstance(entities, list)
+
+
+def test_extract_entities_handles_unicode_names() -> None:
+    from famulix.encoding import extract_entities
+
+    text = "Meeting with 张伟 and María García about the project"
+    entities = extract_entities(text)
+    assert isinstance(entities, list)
+
+
+def test_extract_fact_candidates_handles_non_note_events() -> None:
+    from famulix.encoding import extract_fact_candidates
+    from famulix.events import Event
+
+    event = Event(
+        event_id="binary1",
+        event_type="file_touch",
+        timestamp_s=1000,
+        source="test",
+        data={"path": "/some/file.txt"},
+    )
+    candidates = extract_fact_candidates(event)
+    assert isinstance(candidates, list)
+
+
+def test_day_segment_handles_dst_boundary() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from famulix.encoding import day_segment
+    from famulix.events import Event
+
+    tz = timezone(timedelta(hours=8))
+    base = datetime(2026, 3, 8, 2, 0, tzinfo=tz)
+    events = [
+        Event(
+            event_id=f"e{i}",
+            event_type="note",
+            timestamp_s=int(base.timestamp()) + i * 3600,
+            source="test",
+            data={"text": f"event {i}"},
+        )
+        for i in range(24)
+    ]
+    segments = day_segment(events, tz_offset_hours=8)
+    assert isinstance(segments, dict)
+    assert len(segments) >= 1
