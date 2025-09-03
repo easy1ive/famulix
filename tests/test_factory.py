@@ -317,3 +317,23 @@ def test_small_history_golden_survives_envelope_roundtrip() -> None:
     lines = [event.to_envelope().to_jsonl_line() for event in restored]
     digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
     assert digest == GOLDEN_JSONL_DIGEST
+
+
+def test_generate_history_deterministic_for_known_persona() -> None:
+    from famulix.factory import generate_history
+
+    events1, _ = generate_history(persona_id="alex", seed=42, days=3)
+    events2, _ = generate_history(persona_id="alex", seed=42, days=3)
+    assert len(events1) == len(events2)
+    for e1, e2 in zip(events1, events2, strict=True):
+        assert e1.event_id == e2.event_id
+
+
+def test_generate_history_different_seeds_differ() -> None:
+    from famulix.factory import generate_history
+
+    events1, _ = generate_history(persona_id="alex", seed=1, days=3)
+    events2, _ = generate_history(persona_id="alex", seed=2, days=3)
+    ids1 = {e.event_id for e in events1}
+    ids2 = {e.event_id for e in events2}
+    assert ids1 != ids2
