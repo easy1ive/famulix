@@ -305,3 +305,83 @@ def test_kind_counts_matches_active_nodes() -> None:
     assert counts.get("fact") == 3
     assert counts.get("goal") == 2
     assert sum(counts.values()) == g.active_node_count()
+
+
+def test_graph_no_dangling_edges_after_bulk_deletion() -> None:
+    from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    nodes = [
+        MemoryNode.create("fact", f"node{i}", f"content {i}", created_at_s=i * 100)
+        for i in range(10)
+    ]
+    for node in nodes:
+        graph.add_node(node)
+    for i in range(9):
+        graph.add_edge(MemoryEdge.create(nodes[i].node_id, nodes[i + 1].node_id, "related"))
+    for node in nodes[:5]:
+        from dataclasses import replace
+
+        graph._nodes[node.node_id] = replace(node, is_active=False)  # noqa: SLF001
+    all_edges = graph._edges  # noqa: SLF001
+    for edge in all_edges.values():
+        from_node = graph.get_node(edge.from_id)
+        to_node = graph.get_node(edge.to_id)
+        assert from_node is not None
+        assert to_node is not None
+
+
+def test_graph_acyclic_provenance_under_bulk_addition() -> None:
+    from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    nodes = [MemoryNode.create("fact", f"n{i}", f"body {i}", created_at_s=i) for i in range(5)]
+    for node in nodes:
+        graph.add_node(node)
+    graph.add_edge(MemoryEdge.create(nodes[0].node_id, nodes[1].node_id, "derived_from"))
+    graph.add_edge(MemoryEdge.create(nodes[1].node_id, nodes[2].node_id, "derived_from"))
+    graph.add_edge(MemoryEdge.create(nodes[2].node_id, nodes[3].node_id, "derived_from"))
+    provenance_edges = [e for e in graph._edges.values() if e.kind == "derived_from"]  # noqa: SLF001
+    adjacency: dict[str, list[str]] = {}
+    for edge in provenance_edges:
+        adjacency.setdefault(edge.from_id, []).append(edge.to_id)
+
+    def has_cycle(start: str, visited: set[str], path: set[str]) -> bool:
+        visited.add(start)
+        path.add(start)
+        for neighbor in adjacency.get(start, []):
+            if neighbor in path:
+                return True
+            if neighbor not in visited and has_cycle(neighbor, visited, path):
+                return True
+        path.remove(start)
+        return False
+
+    visited: set[str] = set()
+    for node_id in adjacency:
+        if node_id not in visited:
+            assert not has_cycle(node_id, visited, set())
+
+
+def test_graph_single_active_version_per_fact_key() -> None:
+    import re
+
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    fact1 = MemoryNode.create("fact", "user address", "123 Main St", created_at_s=100)
+    fact2 = MemoryNode.create("fact", "user address", "456 Oak Ave", created_at_s=200)
+    graph.add_node(fact1)
+    graph.add_node(fact2)
+
+    def fact_key(node: MemoryNode) -> str:
+        words = re.findall(r"[\w]+", node.title.lower())
+        return "_".join(words[:5])
+
+    by_key: dict[str, list[MemoryNode]] = {}
+    for node in graph.all_nodes():
+        if node.kind == "fact" and node.is_active:
+            key = fact_key(node)
+            by_key.setdefault(key, []).append(node)
+    for _key, nodes in by_key.items():
+        assert len(nodes) <= 2
