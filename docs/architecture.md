@@ -40,3 +40,34 @@ decisions have a small round-trippable shape for audit reports. Policy rules
 are ordered by explicit priority and then rule id. Session checkpoints bind a
 cursor to the session id, seed, length, and digest; a stale checkpoint cannot
 resume a changed trace. Session diffs report the first divergent frame.
+
+## Data flow
+
+The typical data flow proceeds through five stages:
+
+1. **Ingestion**: Raw events (notes, messages, calendar items, file touches) are validated, assigned content-addressed IDs, and appended to the SQLite event log with checksummed envelopes.
+
+2. **Encoding**: The encoding pipeline segments events into day/session episodes, extracts entity mentions via rule-based alias tables, identifies fact candidates with confidence scores, and deduplicates repeated mentions. Each derived memory node carries provenance edges back to its source events.
+
+3. **Consolidation**: Near-duplicate facts are merged with stable winner selection (newest verified wins). Contradictions (same fact key, incompatible values) are resolved deterministically. Episode summaries cite their source nodes via `derived_from` edges.
+
+4. **Retrieval**: Queries parse structured filters (kind, tag, time window). BM25 scores are fused with recency and salience signals. MMR diversification reduces redundancy. Every result carries a citation pointing to an active memory node.
+
+5. **Assembly**: Context items are selected via 0/1 knapsack DP to maximize value under a token budget. The briefing pipeline composes sections (agenda, commitments, reminders, recent memories) with per-item citations and renders self-contained HTML with embedded SVG visuals.
+
+## Module dependencies
+
+Core modules form a layered dependency graph:
+
+- **Foundation**: `events`, `envelope`, `clock`, `utils` (no internal dependencies)
+- **Storage**: `eventlog` depends on `events`, `envelope`
+- **Memory**: `memory_graph` depends on foundation; `encoding` depends on `memory_graph`, `events`
+- **Scoring**: `salience`, `decay`, `consolidation` depend on `memory_graph`
+- **Retrieval**: `retrieval` depends on `memory_graph`, `salience`
+- **Assembly**: `context`, `briefing`, `reports` depend on `retrieval`, `memory_graph`
+- **Policy**: `privacy`, `tools`, `executor` depend on `memory_graph`
+- **Planning**: `plan_dsl`, `approval`, `triggers` depend on `memory_graph`, `salience`
+- **Session**: `session` depends on foundation only
+- **Evaluation**: `evaluation`, `factory` depend on most modules for end-to-end scenarios
+
+Optional `salience_torch` provides trainable rank-fusion models and is imported only when the `torch` extra is installed.
