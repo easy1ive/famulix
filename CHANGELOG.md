@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Golden digests for a small seeded persona history and a double-run
   determinism suite covering the full offline pipeline.
 - Version consistency test across pyproject, package, and changelog.
+- BM25 index persistence (save/load) with stale-index detection and rebuild
+  from graph.
+- Episode summary generation with provenance edges citing source episodes.
+- Plan DAG step type checking for input/output type validation.
+- Policy engine wildcard pattern support ("*" and empty set match any value)
+  with enhanced conflict diagnostics.
+- Trigger dedupe window suppression to prevent duplicate triggers within
+  configurable time windows.
+- Enhanced session diff with field-level difference reporting for the first
+  N mismatched frames.
+- Tool registry idempotency key tracking and cache management helpers.
+- Approval queue escalation chains with decision time metrics.
 
 ## [0.1.0] - 2026-11-12
 
