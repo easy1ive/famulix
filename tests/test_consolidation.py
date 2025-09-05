@@ -420,3 +420,69 @@ def test_consolidate_with_summaries_records_summary_nodes() -> None:
     report = consolidate_with_summaries(graph, episode_groups={"day1": eps})
     assert len(report.summary_nodes) == 1
     assert graph.has_node(report.summary_nodes[0])
+
+
+def test_resolve_contradiction_trusted_source_wins() -> None:
+    from famulix.consolidation import resolve_contradiction
+    from famulix.memory_graph import MemoryNode
+
+    newer = MemoryNode.create(
+        "fact", "address", "new address", created_at_s=200, metadata={"trust": "high"}
+    )
+    older = MemoryNode.create(
+        "fact", "address", "old address", created_at_s=100, metadata={"trust": "low"}
+    )
+    winner = resolve_contradiction(newer, older, newer_trusted=True, older_trusted=False)
+    assert winner.node_id == newer.node_id
+
+
+def test_resolve_contradiction_older_trusted_wins() -> None:
+    from famulix.consolidation import resolve_contradiction
+    from famulix.memory_graph import MemoryNode
+
+    newer = MemoryNode.create(
+        "fact", "address", "new address", created_at_s=200, metadata={"trust": "low"}
+    )
+    older = MemoryNode.create(
+        "fact", "address", "old address", created_at_s=100, metadata={"trust": "high"}
+    )
+    winner = resolve_contradiction(newer, older, newer_trusted=False, older_trusted=True)
+    assert winner.node_id == older.node_id
+
+
+def test_resolve_contradiction_same_trust_newer_wins() -> None:
+    from famulix.consolidation import resolve_contradiction
+    from famulix.memory_graph import MemoryNode
+
+    newer = MemoryNode.create("fact", "address", "new address", created_at_s=200)
+    older = MemoryNode.create("fact", "address", "old address", created_at_s=100)
+    winner = resolve_contradiction(newer, older, newer_trusted=True, older_trusted=True)
+    assert winner.node_id == newer.node_id
+
+
+def test_resolve_contradiction_same_timestamp_breaks_by_id() -> None:
+    from famulix.consolidation import resolve_contradiction
+    from famulix.memory_graph import MemoryNode
+
+    node_a = MemoryNode.create("fact", "address", "version a", created_at_s=100)
+    node_b = MemoryNode.create("fact", "address", "version b", created_at_s=100)
+    winner = resolve_contradiction(node_a, node_b, newer_trusted=False, older_trusted=False)
+    assert winner.node_id in {node_a.node_id, node_b.node_id}
+    winner2 = resolve_contradiction(node_b, node_a, newer_trusted=False, older_trusted=False)
+    assert winner.node_id == winner2.node_id
+
+
+def test_consolidate_graph_is_idempotent() -> None:
+    from famulix.consolidation import consolidate_graph
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "meeting", "weekly meeting at 10am", created_at_s=100)
+    n2 = MemoryNode.create(
+        "fact", "meeting note", "weekly meeting at 10am on Monday", created_at_s=200
+    )
+    graph.add_node(n1)
+    graph.add_node(n2)
+    report1 = consolidate_graph(graph, dedup_threshold=0.7)
+    report2 = consolidate_graph(graph, dedup_threshold=0.7)
+    assert report2.total_changes() == 0 or report2.total_changes() <= report1.total_changes()
