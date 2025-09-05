@@ -273,3 +273,52 @@ def test_preference_profile_rejects_invalid_inputs() -> None:
         profile.add_feedback("key", "value", "up", timestamp_s=100, confidence=float("nan"))
     with pytest.raises(ValueError, match="\\[0, 1\\]"):
         profile.add_feedback("key", "value", "up", timestamp_s=100, confidence=1.5)
+
+
+def test_merge_profiles_combines_entries_in_time_order() -> None:
+    from famulix.preferences import PreferenceProfile, merge_profiles
+
+    p1 = PreferenceProfile()
+    p1.add_feedback("format", "concise", "up", timestamp_s=100)
+    p1.add_feedback("format", "detailed", "up", timestamp_s=200)
+
+    p2 = PreferenceProfile()
+    p2.add_feedback("tone", "formal", "up", timestamp_s=150)
+
+    merged = merge_profiles(p1, p2)
+    assert merged.entry_count() == 3
+    timestamps = [e.timestamp_s for e in merged.entries]
+    assert timestamps == sorted(timestamps)
+
+
+def test_merge_profiles_handles_empty_profiles() -> None:
+    from famulix.preferences import PreferenceProfile, merge_profiles
+
+    p1 = PreferenceProfile()
+    p2 = PreferenceProfile()
+    merged = merge_profiles(p1, p2)
+    assert merged.entry_count() == 0
+
+
+def test_preference_profile_entries_for_key_filters_correctly() -> None:
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile()
+    profile.add_feedback("format", "concise", "up", timestamp_s=100)
+    profile.add_feedback("tone", "formal", "up", timestamp_s=150)
+    profile.add_feedback("format", "detailed", "down", timestamp_s=200)
+    format_entries = profile.entries_for_key("format")
+    assert len(format_entries) == 2
+    assert all(e.pref_key == "format" for e in format_entries)
+
+
+def test_preference_profile_contradictory_signals_decay_over_time() -> None:
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile(decay_half_life_s=86400)
+    profile.add_feedback("format", "concise", "up", timestamp_s=0, confidence=1.0)
+    profile.add_feedback("format", "detailed", "up", timestamp_s=86400 * 30, confidence=1.0)
+    prefs_early = profile.current_preferences(now_s=86400, min_confidence=0.0)
+    prefs_late = profile.current_preferences(now_s=86400 * 60, min_confidence=0.0)
+    assert "format" in prefs_early
+    assert "format" in prefs_late
