@@ -315,6 +315,25 @@ def run_metadata(
     return meta
 
 
+def config_hash(config: dict[str, object]) -> str:
+    """Compute a stable hash of a configuration dict for reproducibility tracking."""
+    import hashlib
+
+    canonical = json.dumps(config, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def render_limitations(known_issues: list[str]) -> str:
+    """Render a limitations section from a list of known issues."""
+    if not known_issues:
+        return ""
+    lines = ["## Limitations", ""]
+    for issue in known_issues:
+        lines.append(f"- {escape_md(issue)}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _as_timestamp(value: object) -> int:
     """Coerce a node-dict timestamp to an int, treating unusable values as 0.
 
