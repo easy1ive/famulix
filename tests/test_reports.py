@@ -218,3 +218,45 @@ def test_memory_timeline_renders_with_mixed_timestamp_types() -> None:
     assert positions == sorted(positions)
     assert "t=300" in rendered
     assert "t=200" in rendered
+
+
+def test_config_hash_deterministic_for_same_input() -> None:
+    from famulix.reports import config_hash
+
+    config = {"key1": "value1", "key2": 42, "key3": True}
+    hash1 = config_hash(config)
+    hash2 = config_hash(config)
+    assert hash1 == hash2
+    assert len(hash1) == 16
+
+
+def test_config_hash_differs_for_different_input() -> None:
+    from famulix.reports import config_hash
+
+    hash1 = config_hash({"a": 1})
+    hash2 = config_hash({"a": 2})
+    assert hash1 != hash2
+
+
+def test_config_hash_order_independent() -> None:
+    from famulix.reports import config_hash
+
+    hash1 = config_hash({"a": 1, "b": 2})
+    hash2 = config_hash({"b": 2, "a": 1})
+    assert hash1 == hash2
+
+
+def test_render_limitations_formats_issues() -> None:
+    from famulix.reports import render_limitations
+
+    issues = ["No real LLM evaluation", "Synthetic data only"]
+    result = render_limitations(issues)
+    assert "## Limitations" in result
+    assert "No real LLM evaluation" in result
+    assert "Synthetic data only" in result
+
+
+def test_render_limitations_empty_returns_empty() -> None:
+    from famulix.reports import render_limitations
+
+    assert render_limitations([]) == ""
