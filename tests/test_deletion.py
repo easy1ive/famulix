@@ -213,3 +213,55 @@ def test_deletion_without_cascade_preserves_edges() -> None:
     report = delete_memory(graph, n1.node_id, cascade=False)
     assert len(report.deleted_edges) == 0
     assert len(graph.out_edges(n1.node_id)) == 1
+
+
+def test_deletion_prevents_resurrection_through_derived_from_edges() -> None:
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    source = MemoryNode.create("episode", "source event", "event content", created_at_s=100)
+    derived = MemoryNode.create("fact", "derived fact", "fact content", created_at_s=200)
+    graph.add_node(source)
+    graph.add_node(derived)
+    graph.add_edge(MemoryEdge.create(derived.node_id, source.node_id, "derived_from"))
+    delete_memory(graph, derived.node_id, cascade=True)
+    deleted = graph.get_node(derived.node_id)
+    assert deleted is not None
+    assert not deleted.is_active
+    assert deleted.metadata.get("deleted") == "true"
+
+
+def test_deletion_report_records_all_tombstoned_nodes() -> None:
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    node = MemoryNode.create("fact", "to delete", "content", created_at_s=100)
+    graph.add_node(node)
+    report = delete_memory(graph, node.node_id, cascade=True)
+    assert node.node_id in report.tombstone_nodes
+    assert node.node_id in report.deleted_nodes
+
+
+def test_deletion_of_nonexistent_node_returns_empty_report() -> None:
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryGraph
+
+    graph = MemoryGraph()
+    report = delete_memory(graph, "nonexistent_id", cascade=True)
+    assert report.total_deleted == 0
+    assert report.deleted_nodes == []
+
+
+def test_deletion_of_already_deleted_node_is_idempotent() -> None:
+    from famulix.deletion import delete_memory
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    node = MemoryNode.create("fact", "to delete", "content", created_at_s=100)
+    graph.add_node(node)
+    report1 = delete_memory(graph, node.node_id, cascade=True)
+    report2 = delete_memory(graph, node.node_id, cascade=True)
+    assert report1.total_deleted >= 1
+    assert report2.total_deleted == 0
