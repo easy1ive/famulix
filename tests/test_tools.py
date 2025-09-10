@@ -528,3 +528,91 @@ def test_tool_registry_clear_idempotency_cache() -> None:
     cleared = registry.clear_idempotency_cache()
     assert cleared == 2
     assert registry.idempotency_key_count() == 0
+
+
+def test_tool_spec_rejects_empty_name() -> None:
+    import pytest
+
+    from famulix.tools import ToolSpec
+
+    with pytest.raises(ValueError, match="empty"):
+        ToolSpec(name="", description="test", parameters={"type": "object"})
+
+
+def test_tool_spec_rejects_invalid_timeout() -> None:
+    import pytest
+
+    from famulix.tools import ToolSpec
+
+    with pytest.raises(ValueError, match="finite and positive"):
+        ToolSpec(
+            name="test",
+            description="test",
+            parameters={"type": "object"},
+            timeout_seconds=0.0,
+        )
+    with pytest.raises(ValueError, match="finite and positive"):
+        ToolSpec(
+            name="test",
+            description="test",
+            parameters={"type": "object"},
+            timeout_seconds=float("nan"),
+        )
+
+
+def test_tool_spec_rejects_non_object_parameters() -> None:
+    import pytest
+
+    from famulix.tools import ToolSpec
+
+    with pytest.raises(ValueError, match="object schema"):
+        ToolSpec(name="test", description="test", parameters={"type": "string"})
+
+
+def test_tool_spec_rejects_retrying_non_idempotent_side_effects() -> None:
+    import pytest
+
+    from famulix.tools import ToolSpec
+
+    with pytest.raises(ValueError, match="idempotent"):
+        ToolSpec(
+            name="test",
+            description="test",
+            parameters={"type": "object"},
+            side_effect_class="write",
+            max_retries=3,
+            idempotent=False,
+        )
+
+
+def test_tool_validate_arguments_rejects_missing_required() -> None:
+    from famulix.tools import ToolSpec
+
+    spec = ToolSpec(
+        name="test",
+        description="test",
+        parameters={
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    )
+    errors = spec.validate_arguments({})
+    assert len(errors) >= 1
+    assert any("required" in e.lower() or "missing" in e.lower() for e in errors)
+
+
+def test_tool_validate_arguments_accepts_valid_input() -> None:
+    from famulix.tools import ToolSpec
+
+    spec = ToolSpec(
+        name="test",
+        description="test",
+        parameters={
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+            "required": ["name"],
+        },
+    )
+    errors = spec.validate_arguments({"name": "Alice", "age": 30})
+    assert errors == []
