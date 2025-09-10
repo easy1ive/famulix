@@ -158,3 +158,23 @@ def slice_diagnostics(scores: dict[str, float]) -> dict[str, float]:
         "p90": round(float(np.percentile(vals, 90)), 6),
         "max": round(float(np.max(vals)), 6),
     }
+
+
+def diagnostics_by_kind(
+    graph: MemoryGraph,
+    *,
+    now_s: int,
+    config: SalienceConfig | None = None,
+) -> dict[str, dict[str, float]]:
+    """Compute salience diagnostics grouped by node kind.
+
+    Returns {kind: diagnostics_dict} for each kind present in the graph.
+    """
+    scores = score_all_nodes(graph, now_s=now_s, config=config)
+    by_kind: dict[str, dict[str, float]] = {}
+    for node in graph.all_nodes():
+        kind = node.kind
+        if kind not in by_kind:
+            by_kind[kind] = {}
+        by_kind[kind][node.node_id] = scores.get(node.node_id, 0.0)
+    return {kind: slice_diagnostics(kind_scores) for kind, kind_scores in by_kind.items()}
