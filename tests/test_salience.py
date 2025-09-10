@@ -161,3 +161,45 @@ def test_salience_deterministic() -> None:
     s1 = compute_salience(a, graph=g, now_s=500)
     s2 = compute_salience(a, graph=g, now_s=500)
     assert s1 == s2
+
+
+def test_diagnostics_by_kind_groups_scores_correctly() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.salience import diagnostics_by_kind
+
+    graph = MemoryGraph()
+    graph.add_node(MemoryNode.create("fact", "fact1", "content", created_at_s=100))
+    graph.add_node(MemoryNode.create("fact", "fact2", "content", created_at_s=200))
+    graph.add_node(MemoryNode.create("episode", "ep1", "episode content", created_at_s=150))
+    diagnostics = diagnostics_by_kind(graph, now_s=300)
+    assert "fact" in diagnostics
+    assert "episode" in diagnostics
+    assert diagnostics["fact"]["count"] == 2.0
+    assert diagnostics["episode"]["count"] == 1.0
+
+
+def test_diagnostics_by_kind_empty_graph() -> None:
+    from famulix.memory_graph import MemoryGraph
+    from famulix.salience import diagnostics_by_kind
+
+    graph = MemoryGraph()
+    diagnostics = diagnostics_by_kind(graph, now_s=100)
+    assert diagnostics == {}
+
+
+def test_slice_diagnostics_handles_single_score() -> None:
+    from famulix.salience import slice_diagnostics
+
+    stats = slice_diagnostics({"n1": 0.5})
+    assert stats["count"] == 1.0
+    assert stats["mean"] == 0.5
+    assert stats["median"] == 0.5
+    assert stats["max"] == 0.5
+
+
+def test_slice_diagnostics_empty_scores() -> None:
+    from famulix.salience import slice_diagnostics
+
+    stats = slice_diagnostics({})
+    assert stats["count"] == 0.0
+    assert stats["mean"] == 0.0
