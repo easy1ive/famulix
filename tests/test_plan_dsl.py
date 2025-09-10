@@ -338,3 +338,81 @@ def test_check_step_types_detects_missing_provider() -> None:
     errors = check_step_types(plan)
     assert len(errors) == 1
     assert "no provider" in errors[0]
+
+
+def test_validate_plan_rejects_empty_plan_id() -> None:
+    from famulix.plan_dsl import Plan, validate_plan
+
+    plan = Plan(plan_id="")
+    result = validate_plan(plan)
+    assert not result.valid
+    assert any("empty" in e for e in result.errors)
+
+
+def test_validate_plan_rejects_duplicate_step_ids() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_plan
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(id="s1", tool="echo"),
+            PlanStep(id="s1", tool="add"),
+        ],
+    )
+    result = validate_plan(plan)
+    assert not result.valid
+    assert any("duplicate" in e for e in result.errors)
+
+
+def test_validate_plan_detects_cycles() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_plan
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(id="s1", tool="echo", depends_on=["s2"]),
+            PlanStep(id="s2", tool="echo", depends_on=["s1"]),
+        ],
+    )
+    result = validate_plan(plan)
+    assert not result.valid
+    assert any("cycle" in e for e in result.errors)
+
+
+def test_topological_order_respects_dependencies() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, topological_order
+
+    plan = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(id="c", tool="echo", depends_on=["b"]),
+            PlanStep(id="a", tool="echo"),
+            PlanStep(id="b", tool="echo", depends_on=["a"]),
+        ],
+    )
+    order = topological_order(plan)
+    assert order.index("a") < order.index("b")
+    assert order.index("b") < order.index("c")
+
+
+def test_plan_diff_detects_added_removed_modified() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, plan_diff
+
+    plan_a = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(id="s1", tool="echo", inputs={"text": "old"}),
+            PlanStep(id="s2", tool="add"),
+        ],
+    )
+    plan_b = Plan(
+        plan_id="test",
+        steps=[
+            PlanStep(id="s1", tool="echo", inputs={"text": "new"}),
+            PlanStep(id="s3", tool="multiply"),
+        ],
+    )
+    diff = plan_diff(plan_a, plan_b)
+    assert "s3" in diff["added"]
+    assert "s2" in diff["removed"]
+    assert "s1" in diff["modified"]
