@@ -142,3 +142,81 @@ def test_strict_collect_propagates_connector_error() -> None:
     flaky.collect()
     with pytest.raises(ConnectorError):
         hub.collect()
+
+
+def test_connector_record_validates_fields() -> None:
+    import pytest
+
+    from famulix.connectors import ConnectorRecord
+
+    record = ConnectorRecord(
+        source="calendar",
+        external_id="evt_1",
+        kind="calendar",
+        timestamp_s=1000,
+        title="Meeting",
+        body="Team sync",
+    )
+    assert record.source == "calendar"
+    with pytest.raises(ValueError, match="non-empty"):
+        ConnectorRecord(
+            source="", external_id="x", kind="note", timestamp_s=100, title="t", body="b"
+        )
+    with pytest.raises(ValueError, match="non-negative"):
+        ConnectorRecord(
+            source="s", external_id="x", kind="note", timestamp_s=-1, title="t", body="b"
+        )
+
+
+def test_connector_batch_create_orders_by_timestamp() -> None:
+    from famulix.connectors import ConnectorBatch, ConnectorRecord
+
+    r1 = ConnectorRecord(
+        source="notes", external_id="n2", kind="note", timestamp_s=200, title="Second", body="b"
+    )
+    r2 = ConnectorRecord(
+        source="notes", external_id="n1", kind="note", timestamp_s=100, title="First", body="b"
+    )
+    batch = ConnectorBatch.create("notes", [r1, r2])
+    assert batch.records[0].timestamp_s <= batch.records[1].timestamp_s
+    assert batch.verify()
+
+
+def test_connector_hub_collects_from_multiple_sources() -> None:
+    from famulix.connectors import ConnectorHub, ConnectorRecord, ScriptedConnector
+
+    r1 = ConnectorRecord(
+        source="calendar",
+        external_id="c1",
+        kind="calendar",
+        timestamp_s=100,
+        title="Meeting",
+        body="b",
+    )
+    r2 = ConnectorRecord(
+        source="notes", external_id="n1", kind="note", timestamp_s=200, title="Note", body="b"
+    )
+    cal = ScriptedConnector(source="calendar", records=(r1,))
+    notes = ScriptedConnector(source="notes", records=(r2,))
+    hub = ConnectorHub([cal, notes])
+    batches = hub.collect()
+    assert len(batches) == 2
+    sources = {b.source for b in batches}
+    assert sources == {"calendar", "notes"}
+
+
+def test_connector_hub_rejects_duplicate_sources() -> None:
+    import pytest
+
+    from famulix.connectors import ConnectorHub, ConnectorRecord, ScriptedConnector
+
+    r1 = ConnectorRecord(
+        source="cal", external_id="c1", kind="calendar", timestamp_s=100, title="M", body="b"
+    )
+    r2 = ConnectorRecord(
+        source="cal", external_id="c2", kind="calendar", timestamp_s=200, title="N", body="b"
+    )
+    c1 = ScriptedConnector(source="cal", records=(r1,))
+    c2 = ScriptedConnector(source="cal", records=(r2,))
+    with pytest.raises(ValueError, match="unique"):
+        ConnectorHub([c1, c2])
