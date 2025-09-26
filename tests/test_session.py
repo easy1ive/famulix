@@ -290,3 +290,77 @@ def test_session_diff_handles_length_mismatch() -> None:
     assert not diff["identical"]
     assert diff["length_diff"] == -1
     assert diff["first_difference"] == 1
+
+
+def test_session_checkpoint_captures_state() -> None:
+    from famulix.session import SessionRecorder
+
+    rec = SessionRecorder(session_id="test_session", seed=42)
+    rec.record("event", {"data": "one"}, timestamp_s=100)
+    rec.record("event", {"data": "two"}, timestamp_s=200)
+    checkpoint = rec.checkpoint()
+    assert checkpoint["session_id"] == "test_session"
+    assert checkpoint["seed"] == 42
+    assert checkpoint["next_seq"] == 2
+    assert "digest" in checkpoint
+
+
+def test_session_resume_from_checkpoint() -> None:
+    from famulix.session import SessionRecorder
+
+    rec1 = SessionRecorder(session_id="test", seed=42)
+    rec1.record("event", {"data": "one"}, timestamp_s=100)
+    checkpoint = rec1.checkpoint()
+    rec2 = SessionRecorder.resume_from(checkpoint, rec1)
+    assert rec2.session_id == rec1.session_id
+    assert rec2.entry_count() == rec1.entry_count()
+
+
+def test_session_checkpoint_rejects_stale_cursor() -> None:
+    import pytest
+
+    from famulix.session import SessionRecorder
+
+    rec = SessionRecorder(session_id="test", seed=42)
+    rec.record("event", {"data": "one"}, timestamp_s=100)
+    checkpoint = rec.checkpoint()
+    rec.record("event", {"data": "two"}, timestamp_s=200)
+    with pytest.raises(ValueError, match="stale"):
+        SessionRecorder.resume_from(checkpoint, rec)
+
+
+def test_session_checkpoint_rejects_wrong_session() -> None:
+    import pytest
+
+    from famulix.session import SessionRecorder
+
+    rec1 = SessionRecorder(session_id="session1", seed=42)
+    rec1.record("event", {"data": "one"}, timestamp_s=100)
+    checkpoint = rec1.checkpoint()
+    rec2 = SessionRecorder(session_id="session2", seed=42)
+    rec2.record("event", {"data": "one"}, timestamp_s=100)
+    with pytest.raises(ValueError, match="does not match"):
+        SessionRecorder.resume_from(checkpoint, rec2)
+
+
+def test_session_verify_detects_tampering() -> None:
+    from famulix.session import SessionRecorder
+
+    rec = SessionRecorder(session_id="test", seed=42)
+    rec.record("event", {"data": "one"}, timestamp_s=100)
+    rec.record("event", {"data": "two"}, timestamp_s=200)
+    assert rec.verify()
+    rec.entries[1]["payload"] = {"data": "tampered"}
+    assert not rec.verify()
+
+
+def test_session_kinds_seen_counts_events() -> None:
+    from famulix.session import SessionRecorder
+
+    rec = SessionRecorder(session_id="test", seed=42)
+    rec.record("event", {"data": "one"}, timestamp_s=100)
+    rec.record("decision", {"result": "yes"}, timestamp_s=200)
+    rec.record("event", {"data": "two"}, timestamp_s=300)
+    kinds = rec.kinds_seen()
+    assert kinds["event"] == 2
+    assert kinds["decision"] == 1
