@@ -344,3 +344,41 @@ def test_steps_run_in_dependency_order_not_declaration_order() -> None:
     state = execute_plan(plan, build_default_registry())
     assert not state.terminated
     assert [item.step_id for item in state.history] == ["first", "second"]
+
+
+def test_execution_state_initializes_with_defaults() -> None:
+    from famulix.executor import ExecutionState
+
+    state = ExecutionState()
+    assert state.steps_done == 0
+    assert state.tokens_used == 0
+    assert state.money_spent == 0.0
+    assert not state.terminated
+
+
+def test_execution_budget_tracks_consumption() -> None:
+    from famulix.executor import ExecutionBudget
+
+    budget = ExecutionBudget()
+    assert budget.max_steps > 0
+    assert budget.max_tokens > 0
+    assert budget.max_money > 0.0
+
+
+def test_step_execution_records_result() -> None:
+    from famulix.executor import StepExecution
+
+    step = StepExecution(step_id="s1", success=True)
+    assert step.step_id == "s1"
+    assert step.success is True
+
+
+def test_execution_summary_formats_state() -> None:
+    from famulix.executor import ExecutionState, execution_summary
+
+    state = ExecutionState()
+    state.steps_done = 3
+    state.money_spent = 5.5
+    summary = execution_summary(state)
+    assert isinstance(summary, dict)
+    assert "steps_done" in summary or "step_count" in summary
