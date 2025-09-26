@@ -385,3 +385,77 @@ def test_graph_single_active_version_per_fact_key() -> None:
             by_key.setdefault(key, []).append(node)
     for _key, nodes in by_key.items():
         assert len(nodes) <= 2
+
+
+def test_memory_graph_node_count_tracks_active_and_inactive() -> None:
+    from dataclasses import replace
+
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "active", "content", created_at_s=100)
+    n2 = MemoryNode.create("fact", "inactive", "content", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    assert graph.node_count() == 2
+    graph._nodes[n2.node_id] = replace(n2, is_active=False)  # noqa: SLF001
+    assert graph.node_count() == 2
+    active_count = sum(1 for n in graph.all_nodes() if n.is_active)
+    assert active_count == 1
+
+
+def test_memory_graph_neighbors_returns_connected_nodes() -> None:
+    from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "n1", "content", created_at_s=100)
+    n2 = MemoryNode.create("fact", "n2", "content", created_at_s=200)
+    n3 = MemoryNode.create("fact", "n3", "content", created_at_s=300)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    graph.add_node(n3)
+    graph.add_edge(MemoryEdge.create(n1.node_id, n2.node_id, "related"))
+    graph.add_edge(MemoryEdge.create(n1.node_id, n3.node_id, "related"))
+    neighbors = graph.neighbors(n1.node_id)
+    neighbor_ids = {n.node_id for n in neighbors}
+    assert n2.node_id in neighbor_ids
+    assert n3.node_id in neighbor_ids
+
+
+def test_memory_edge_create_generates_deterministic_id() -> None:
+    from famulix.memory_graph import MemoryEdge
+
+    e1 = MemoryEdge.create("from1", "to1", "related", weight=1.0)
+    e2 = MemoryEdge.create("from1", "to1", "related", weight=1.0)
+    assert e1.edge_id == e2.edge_id
+    e3 = MemoryEdge.create("from1", "to1", "different", weight=1.0)
+    assert e1.edge_id != e3.edge_id
+
+
+def test_memory_node_metadata_preserved_through_operations() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    node = MemoryNode.create(
+        "fact",
+        "test",
+        "content",
+        created_at_s=100,
+        metadata={"tier": "hot", "pinned": "true"},
+    )
+    graph.add_node(node)
+    retrieved = graph.get_node(node.node_id)
+    assert retrieved is not None
+    assert retrieved.metadata["tier"] == "hot"
+    assert retrieved.metadata["pinned"] == "true"
+
+
+def test_memory_graph_has_node_checks_existence() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    node = MemoryNode.create("fact", "test", "content", created_at_s=100)
+    assert not graph.has_node(node.node_id)
+    graph.add_node(node)
+    assert graph.has_node(node.node_id)
+    assert not graph.has_node("nonexistent")
