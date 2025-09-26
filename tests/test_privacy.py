@@ -580,3 +580,90 @@ def test_redaction_different_salt_produces_different_tokens() -> None:
     assert redacted1 != redacted2
     assert list(mapping1.values()) == list(mapping2.values())
     assert list(mapping1.keys()) != list(mapping2.keys())
+
+
+def test_access_log_records_entries_in_order() -> None:
+    from famulix.privacy import AccessLog
+
+    log = AccessLog()
+    log.record(actor="user1", action="read", resource="mem:1", result="allowed", timestamp_s=100)
+    log.record(actor="user2", action="write", resource="mem:2", result="denied", timestamp_s=200)
+    assert log.entry_count() == 2
+    entries = log.entries
+    assert entries[0]["actor"] == "user1"
+    assert entries[1]["actor"] == "user2"
+
+
+def test_access_log_immutable_entries() -> None:
+    from famulix.privacy import AccessLog
+
+    log = AccessLog()
+    log.record(actor="user", action="read", resource="mem:1", result="allowed", timestamp_s=100)
+    entries = log.entries
+    assert isinstance(entries, tuple)
+
+
+def test_access_log_filter_by_actor() -> None:
+    from famulix.privacy import AccessLog
+
+    log = AccessLog()
+    log.record(actor="alice", action="read", resource="mem:1", result="allowed", timestamp_s=100)
+    log.record(actor="bob", action="write", resource="mem:2", result="denied", timestamp_s=200)
+    log.record(actor="alice", action="read", resource="mem:3", result="allowed", timestamp_s=300)
+    alice_entries = log.filter_by_actor("alice")
+    assert len(alice_entries) == 2
+    assert all(e["actor"] == "alice" for e in alice_entries)
+
+
+def test_access_log_result_summary() -> None:
+    from famulix.privacy import AccessLog
+
+    log = AccessLog()
+    log.record(actor="u1", action="read", resource="r1", result="allowed", timestamp_s=100)
+    log.record(actor="u2", action="write", resource="r2", result="denied", timestamp_s=200)
+    log.record(actor="u3", action="read", resource="r3", result="allowed", timestamp_s=300)
+    summary = log.result_summary()
+    assert summary["allowed"] == 2
+    assert summary["denied"] == 1
+
+
+def test_privacy_gate_blocks_lower_clearance() -> None:
+    from famulix.privacy import AccessLog, PolicyEngine, PrivacyGate
+
+    engine = PolicyEngine()
+    gate = PrivacyGate(engine, audit=AccessLog())
+    decision = gate.request(
+        actor="user",
+        action="read",
+        resource="mem:1",
+        data_tier="private",
+        clearance_tier="shared",
+        timestamp_s=100,
+    )
+    assert not decision.allowed
+    assert "clearance" in decision.reason.lower()
+
+
+def test_privacy_gate_allows_matching_clearance() -> None:
+    from famulix.privacy import AccessLog, PolicyEngine, PolicyRule, PrivacyGate
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="allow_read",
+            effect="allow",
+            actions={"read"},
+            resources={"mem:1"},
+            tiers={"personal"},
+        )
+    )
+    gate = PrivacyGate(engine, audit=AccessLog())
+    decision = gate.request(
+        actor="user",
+        action="read",
+        resource="mem:1",
+        data_tier="personal",
+        clearance_tier="personal",
+        timestamp_s=100,
+    )
+    assert decision.allowed
