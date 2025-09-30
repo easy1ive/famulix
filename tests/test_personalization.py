@@ -148,3 +148,70 @@ def test_default_style_with_custom_config() -> None:
     assert style.format == "html"
     assert style.ordering == "recency"
     assert style.length == "short"
+
+
+def test_apply_preferences_uses_cold_start_defaults_when_profile_empty() -> None:
+    from famulix.personalization import apply_preferences
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile()
+    style = apply_preferences(profile, now_s=1000)
+    assert style.tone == "neutral"
+    assert style.format == "markdown"
+    assert style.ordering == "priority"
+
+
+def test_apply_preferences_applies_learned_tone() -> None:
+    from famulix.personalization import apply_preferences
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile()
+    profile.add_feedback("tone", "formal", "up", timestamp_s=500, confidence=0.9)
+    style = apply_preferences(profile, now_s=1000)
+    assert style.tone == "formal"
+    assert any(p.key == "tone" for p in style.applied)
+
+
+def test_briefing_style_explain_returns_reasons() -> None:
+    from famulix.personalization import AppliedPreference, BriefingStyle
+
+    style = BriefingStyle(
+        tone="casual",
+        applied=[
+            AppliedPreference(key="tone", value="casual", confidence=0.8, reason="user feedback"),
+        ],
+    )
+    explanations = style.explain()
+    assert len(explanations) == 1
+    assert "tone" in explanations[0]
+    assert "casual" in explanations[0]
+
+
+def test_apply_preferences_produces_explanations_for_each_applied_choice() -> None:
+    from famulix.personalization import apply_preferences
+    from famulix.preferences import PreferenceProfile
+
+    profile = PreferenceProfile()
+    profile.add_feedback("tone", "formal", "up", timestamp_s=500, confidence=0.9)
+    profile.add_feedback("format", "bullets", "up", timestamp_s=600, confidence=0.85)
+    style = apply_preferences(profile, now_s=1000)
+    assert len(style.applied) >= 2
+    explanations = style.explain()
+    assert len(explanations) >= 2
+
+
+def test_counterfactual_compare_shows_profile_differences() -> None:
+    from famulix.personalization import counterfactual_compare
+    from famulix.preferences import PreferenceProfile
+
+    profile_a = PreferenceProfile()
+    profile_a.add_feedback("tone", "formal", "up", timestamp_s=500, confidence=0.9)
+
+    profile_b = PreferenceProfile()
+    profile_b.add_feedback("tone", "casual", "up", timestamp_s=500, confidence=0.9)
+
+    diff = counterfactual_compare(profile_a, profile_b, now_s=1000)
+    assert "tone" in diff
+    assert diff["tone"]["a"] == "formal"
+    assert diff["tone"]["b"] == "casual"
+    assert diff["tone"]["changed"] is True
