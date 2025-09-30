@@ -150,3 +150,71 @@ def test_type_counts_matches_event_types() -> None:
         assert counts.get("note", 0) == 2
         assert counts.get("message", 0) == 1
         assert sum(counts.values()) == log.count()
+
+
+def test_eventlog_append_increments_count() -> None:
+    from famulix.eventlog import EventLog
+    from famulix.events import Event
+
+    log = EventLog()
+    assert log.count() == 0
+    e1 = Event.create("note", timestamp_s=100, source="test", data={"text": "first"})
+    log.append(e1, inserted_at_s=1000)
+    assert log.count() == 1
+    e2 = Event.create("note", timestamp_s=200, source="test", data={"text": "second"})
+    log.append(e2, inserted_at_s=2000)
+    assert log.count() == 2
+
+
+def test_eventlog_get_by_seq_returns_event() -> None:
+    from famulix.eventlog import EventLog
+    from famulix.events import Event
+
+    log = EventLog()
+    e1 = Event.create("note", timestamp_s=100, source="test", data={"text": "first"})
+    seq = log.append(e1, inserted_at_s=1000)
+    retrieved = log.get_by_seq(seq)
+    assert retrieved is not None
+    assert retrieved.event_id == e1.event_id
+
+
+def test_eventlog_get_by_id_returns_event() -> None:
+    from famulix.eventlog import EventLog
+    from famulix.events import Event
+
+    log = EventLog()
+    e1 = Event.create("note", timestamp_s=100, source="test", data={"text": "first"})
+    log.append(e1, inserted_at_s=1000)
+    retrieved = log.get_by_id(e1.event_id)
+    assert retrieved is not None
+    assert retrieved.timestamp_s == 100
+
+
+def test_eventlog_iter_yields_all_events() -> None:
+    from famulix.eventlog import EventLog
+    from famulix.events import Event
+
+    log = EventLog()
+    for i in range(5):
+        e = Event.create("note", timestamp_s=i * 100, source="test", data={"index": i})
+        log.append(e, inserted_at_s=i * 1000)
+    events = list(log.iter_events())
+    assert len(events) == 5
+
+
+def test_eventlog_sources_lists_distinct_sources() -> None:
+    from famulix.eventlog import EventLog
+    from famulix.events import Event
+
+    log = EventLog()
+    log.append(
+        Event.create("note", timestamp_s=100, source="calendar", data={}), inserted_at_s=1000
+    )
+    log.append(Event.create("note", timestamp_s=200, source="notes", data={}), inserted_at_s=2000)
+    log.append(
+        Event.create("note", timestamp_s=300, source="calendar", data={}), inserted_at_s=3000
+    )
+    sources = log.sources()
+    assert "calendar" in sources
+    assert "notes" in sources
+    assert len(sources) == 2
