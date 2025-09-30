@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 from famulix.memory_graph import MemoryGraph, MemoryNode
 from famulix.triggers import TriggerConfig, TriggerLog, generate_triggers
 
@@ -165,3 +167,45 @@ def test_trigger_dedupe_window_allows_after_expiry() -> None:
     config = TriggerConfig(salience_threshold=0.1, cooldown_seconds=0, dedupe_window_seconds=600)
     triggers = generate_triggers(graph, now_s=2000, config=config, log=log)
     assert len(triggers) >= 1
+
+
+def test_is_quiet_hour_detects_overnight_window() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from famulix.triggers import TriggerConfig, _is_quiet_hour
+
+    config = TriggerConfig(quiet_hours_start=22, quiet_hours_end=8)
+    utc8 = timezone(timedelta(hours=8))
+    dt_23 = datetime(2026, 11, 12, 23, 0, tzinfo=utc8)
+    assert _is_quiet_hour(int(dt_23.timestamp()), config)
+    dt_02 = datetime(2026, 11, 12, 2, 0, tzinfo=utc8)
+    assert _is_quiet_hour(int(dt_02.timestamp()), config)
+    dt_12 = datetime(2026, 11, 12, 12, 0, tzinfo=utc8)
+    assert not _is_quiet_hour(int(dt_12.timestamp()), config)
+
+
+def test_generate_triggers_returns_empty_during_quiet_hours() -> None:
+    from datetime import datetime
+
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.triggers import TriggerConfig, generate_triggers
+
+    graph = MemoryGraph()
+    graph.add_node(MemoryNode.create("reminder", "important task", "do this", created_at_s=1000))
+    config = TriggerConfig(quiet_hours_start=0, quiet_hours_end=23)
+    dt = datetime(2026, 11, 12, 12, 0, tzinfo=UTC)
+    triggers = generate_triggers(graph, now_s=int(dt.timestamp()), config=config)
+    assert triggers == []
+
+
+def test_trigger_log_records_suppressed_events() -> None:
+    from famulix.triggers import TriggerLog
+
+    log = TriggerLog()
+    log.record(trigger_id="t1", memory_id="m1", action="generated", timestamp_s=100)
+    log.record(
+        trigger_id="t2", memory_id="m2", action="suppressed", timestamp_s=200, reason="quiet hours"
+    )
+    assert log.entry_count() == 2
+    assert log.count_by_action("suppressed") == 1
+    assert log.count_by_action("generated") == 1
