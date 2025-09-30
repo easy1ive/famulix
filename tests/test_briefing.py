@@ -550,3 +550,70 @@ def test_dedupe_uses_only_the_primary_citation() -> None:
         _item("secondary", "commitments", ["mem-2", "mem-9"]),
     ]
     assert [item.title for item in dedupe_briefing_items(items)] == ["primary", "secondary"]
+
+
+def test_briefing_item_stores_memory_ids() -> None:
+    from famulix.briefing import BriefingItem
+
+    item = BriefingItem(
+        title="Meeting",
+        body="Team sync at 10am",
+        section="agenda",
+        memory_ids=["mem_123", "mem_456"],
+    )
+    assert item.section == "agenda"
+    assert len(item.memory_ids) == 2
+    assert "mem_123" in item.memory_ids
+
+
+def test_briefing_groups_items_by_section() -> None:
+    from famulix.briefing import Briefing, BriefingItem
+
+    items = [
+        BriefingItem(title="Meeting", body="b", section="agenda"),
+        BriefingItem(title="Task", body="b", section="reminders"),
+        BriefingItem(title="Lunch", body="b", section="agenda"),
+    ]
+    briefing = Briefing(
+        title="Daily Briefing", date_str="2026-11-12", items=items, metadata={"version": "0.1.0"}
+    )
+    agenda_items = [i for i in briefing.items if i.section == "agenda"]
+    assert len(agenda_items) == 2
+
+
+def test_dedupe_briefing_items_removes_duplicates() -> None:
+    from famulix.briefing import BriefingItem, dedupe_briefing_items
+
+    items = [
+        BriefingItem(title="Meeting", body="same", section="agenda", memory_ids=["m1"]),
+        BriefingItem(title="Meeting", body="same", section="agenda", memory_ids=["m1"]),
+        BriefingItem(title="Task", body="different", section="reminders", memory_ids=["m2"]),
+    ]
+    deduped = dedupe_briefing_items(items)
+    assert len(deduped) == 2
+
+
+def test_truncate_briefing_respects_max_items() -> None:
+    from famulix.briefing import Briefing, BriefingItem, truncate_briefing
+
+    items = [BriefingItem(title=f"Item {i}", body="b", section="agenda") for i in range(10)]
+    briefing = Briefing(
+        title="Daily Briefing",
+        date_str="2026-11-12",
+        items=items,
+        sections=["agenda"],
+        metadata={},
+    )
+    truncated = truncate_briefing(briefing, max_items=5)
+    assert len(truncated.items) == 5
+
+
+def test_estimate_briefing_tokens_counts_content() -> None:
+    from famulix.briefing import Briefing, BriefingItem, estimate_briefing_tokens
+
+    items = [
+        BriefingItem(title="Meeting", body="Team sync discussion", section="agenda"),
+    ]
+    briefing = Briefing(title="Daily Briefing", date_str="2026-11-12", items=items, metadata={})
+    tokens = estimate_briefing_tokens(briefing)
+    assert tokens > 0
