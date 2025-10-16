@@ -97,3 +97,49 @@ def test_week_bounds_on_monday_starts_same_day() -> None:
     tz = timezone(timedelta(hours=8))
     expected_start = datetime(2026, 1, 12, 0, 0, tzinfo=tz)
     assert start == int(expected_start.timestamp())
+
+
+def test_day_start_epoch_returns_midnight_timestamp() -> None:
+    from famulix.clock import day_start_epoch
+
+    ts = day_start_epoch("2026-11-12", tz_offset_hours=8)
+    assert isinstance(ts, int)
+    assert ts > 0
+
+
+def test_day_bounds_epoch_returns_start_and_end() -> None:
+    from famulix.clock import day_bounds_epoch
+
+    start, end = day_bounds_epoch("2026-11-12", tz_offset_hours=8)
+    assert start < end
+    assert end - start == 86400
+
+
+def test_week_bounds_epoch_returns_seven_days() -> None:
+    from famulix.clock import week_bounds_epoch
+
+    start, end = week_bounds_epoch("2026-11-12", tz_offset_hours=8)
+    assert start < end
+    assert end - start == 7 * 86400
+
+
+def test_day_start_epoch_deterministic_for_same_input() -> None:
+    from famulix.clock import day_start_epoch
+
+    ts1 = day_start_epoch("2026-11-12", tz_offset_hours=8)
+    ts2 = day_start_epoch("2026-11-12", tz_offset_hours=8)
+    assert ts1 == ts2
+
+
+def test_synthetic_clock_advances_time() -> None:
+    from famulix.clock import SyntheticClock
+
+    clock = SyntheticClock(start_timestamp_s=1000)
+    dt1 = clock.now()
+    assert dt1 is not None
+    clock2 = clock.advance(500)
+    dt2 = clock2.now()
+    assert dt2 > dt1
+    clock3 = clock2.advance(200)
+    dt3 = clock3.now()
+    assert dt3 > dt2
