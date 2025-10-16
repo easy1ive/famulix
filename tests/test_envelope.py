@@ -84,3 +84,49 @@ def test_envelope_jsonl_rejects_nonstandard_numbers() -> None:
 def test_envelope_wrap_rejects_non_json_payload_values() -> None:
     with pytest.raises(ValueError):
         Envelope.wrap("event", {"number": float("inf")})
+
+
+def test_envelope_wrap_creates_checksummed_wrapper() -> None:
+    from famulix.envelope import Envelope
+
+    env = Envelope.wrap("note", {"text": "hello"})
+    assert env.kind == "note"
+    assert env.payload == {"text": "hello"}
+    assert isinstance(env.checksum, str)
+    assert len(env.checksum) > 0
+
+
+def test_envelope_to_jsonl_roundtrip() -> None:
+    from famulix.envelope import Envelope
+
+    env = Envelope.wrap("event", {"data": "test"})
+    line = env.to_jsonl_line()
+    restored = Envelope.from_jsonl_line(line)
+    assert restored.kind == env.kind
+    assert restored.payload == env.payload
+    assert restored.checksum == env.checksum
+
+
+def test_envelope_checksum_deterministic() -> None:
+    from famulix.envelope import Envelope
+
+    env1 = Envelope.wrap("note", {"text": "same"})
+    env2 = Envelope.wrap("note", {"text": "same"})
+    assert env1.checksum == env2.checksum
+
+
+def test_envelope_checksum_detects_tampering() -> None:
+    from famulix.envelope import Envelope
+
+    env1 = Envelope.wrap("note", {"text": "original"})
+    env2 = Envelope.wrap("note", {"text": "tampered"})
+    assert env1.checksum != env2.checksum
+
+
+def test_envelope_rejects_empty_kind() -> None:
+    import pytest
+
+    from famulix.envelope import Envelope
+
+    with pytest.raises(ValueError, match="non-empty"):
+        Envelope.wrap("", {"data": "test"})
