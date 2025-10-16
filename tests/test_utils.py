@@ -81,3 +81,55 @@ def test_truncate_string_custom_suffix() -> None:
 def test_truncate_string_rejects_negative_max_len() -> None:
     with pytest.raises(ValueError, match="non-negative"):
         truncate_string("x", -1)
+
+
+def test_stable_json_dumps_sorts_keys() -> None:
+    from famulix.utils import stable_json_dumps
+
+    data = {"z": 1, "a": 2, "m": 3}
+    result = stable_json_dumps(data)
+    assert result == '{"a":2,"m":3,"z":1}'
+
+
+def test_stable_json_dumps_deterministic() -> None:
+    from famulix.utils import stable_json_dumps
+
+    data = {"key": "value", "number": 42}
+    result1 = stable_json_dumps(data)
+    result2 = stable_json_dumps(data)
+    assert result1 == result2
+
+
+def test_stable_hash_produces_consistent_output() -> None:
+    from famulix.utils import stable_hash
+
+    text = "hello world"
+    hash1 = stable_hash(text)
+    hash2 = stable_hash(text)
+    assert hash1 == hash2
+    assert len(hash1) > 0
+
+
+def test_stable_hash_detects_changes() -> None:
+    from famulix.utils import stable_hash
+
+    hash1 = stable_hash("original")
+    hash2 = stable_hash("modified")
+    assert hash1 != hash2
+
+
+def test_truncate_string_respects_max_length() -> None:
+    from famulix.utils import truncate_string
+
+    long_text = "a" * 100
+    truncated = truncate_string(long_text, max_len=50)
+    assert len(truncated) <= 50
+    assert truncated.endswith("...")
+
+
+def test_truncate_string_preserves_short_text() -> None:
+    from famulix.utils import truncate_string
+
+    short_text = "hello"
+    result = truncate_string(short_text, max_len=50)
+    assert result == short_text
