@@ -459,3 +459,31 @@ def test_memory_graph_has_node_checks_existence() -> None:
     graph.add_node(node)
     assert graph.has_node(node.node_id)
     assert not graph.has_node("nonexistent")
+
+
+def test_memory_graph_active_nodes_returns_only_active() -> None:
+    from dataclasses import replace
+
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "active", "content", created_at_s=100)
+    n2 = MemoryNode.create("fact", "inactive", "content", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    graph._nodes[n2.node_id] = replace(n2, is_active=False)  # noqa: SLF001
+    active = graph.active_nodes()
+    assert len(active) == 1
+    assert active[0].node_id == n1.node_id
+
+
+def test_memory_graph_edge_count_tracks_all_edges() -> None:
+    from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    nodes = [MemoryNode.create("fact", f"n{i}", "content", created_at_s=i * 100) for i in range(5)]
+    for node in nodes:
+        graph.add_node(node)
+    for i in range(4):
+        graph.add_edge(MemoryEdge.create(nodes[i].node_id, nodes[i + 1].node_id, "next"))
+    assert graph.edge_count() == 4
