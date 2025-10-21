@@ -73,3 +73,49 @@ def test_feedback_event_rating() -> None:
     assert evt.event_type == "feedback_tap"
     assert evt.data["rating"] == "up"
     assert evt.data["target_id"] == "suggestion_1"
+
+
+def test_event_create_generates_deterministic_id() -> None:
+    from famulix.events import Event
+
+    e1 = Event.create("note", timestamp_s=1000, source="test", data={"text": "hello"})
+    e2 = Event.create("note", timestamp_s=1000, source="test", data={"text": "hello"})
+    assert e1.event_id == e2.event_id
+
+
+def test_event_create_different_data_produces_different_ids() -> None:
+    from famulix.events import Event
+
+    e1 = Event.create("note", timestamp_s=1000, source="test", data={"text": "hello"})
+    e2 = Event.create("note", timestamp_s=1000, source="test", data={"text": "world"})
+    assert e1.event_id != e2.event_id
+
+
+def test_event_create_assigns_version() -> None:
+    from famulix.events import Event
+
+    event = Event.create("note", timestamp_s=1000, source="test", data={})
+    assert event.version == 1
+
+
+def test_event_to_envelope_wraps_with_checksum() -> None:
+    from famulix.events import Event
+
+    event = Event.create("note", timestamp_s=1000, source="test", data={"key": "value"})
+    envelope = event.to_envelope()
+    assert envelope.kind == "event"
+    assert envelope.checksum is not None
+    assert len(envelope.checksum) > 0
+
+
+def test_event_from_envelope_roundtrip() -> None:
+    from famulix.events import Event
+
+    original = Event.create(
+        "calendar", timestamp_s=2000, source="google", data={"title": "Meeting"}
+    )
+    envelope = original.to_envelope()
+    restored = Event.from_envelope(envelope)
+    assert restored.event_id == original.event_id
+    assert restored.timestamp_s == original.timestamp_s
+    assert restored.data == original.data
