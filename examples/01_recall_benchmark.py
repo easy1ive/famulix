@@ -92,6 +92,13 @@ def main() -> int:
     print()
 
     print("=== Done ===")
+    print()
+    print("Interpretation:")
+    print("  - Recall@k measures what fraction of planted facts appear in top-k results.")
+    print("  - Precision@k measures what fraction of top-k results are planted facts.")
+    print("  - Higher k generally yields higher recall but lower precision.")
+    print("  - These scores describe retrieval mechanics on synthetic data only.")
+    print()
     print("Note: All scores come from synthetic data with planted ground truth.")
     print("      No real LLM, no real user data, no network calls.")
     return 0
