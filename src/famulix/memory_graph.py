@@ -339,3 +339,91 @@ class MemoryGraph:
             return False
 
         return any(color[nid] == white and dfs(nid) for nid in self._nodes)
+
+    def extract_subgraph(
+        self,
+        seed_ids: list[MemoryId],
+        *,
+        max_depth: int = 2,
+        edge_kinds: set[EdgeKind] | None = None,
+    ) -> MemoryGraph:
+        """Extract a k-hop subgraph around seed nodes.
+
+        Returns a new MemoryGraph containing all nodes reachable within
+        max_depth hops via edges of the specified kinds (or all kinds if
+        None), plus all edges between included nodes. The seed nodes are
+        always included even if isolated.
+        """
+        if max_depth < 0:
+            raise ValueError("max_depth must be non-negative")
+        included_nodes: set[MemoryId] = set()
+        frontier: list[MemoryId] = [nid for nid in seed_ids if nid in self._nodes]
+        included_nodes.update(frontier)
+
+        depth = 0
+        while frontier and depth < max_depth:
+            next_frontier: list[MemoryId] = []
+            for nid in frontier:
+                for edge in self.out_edges(nid):
+                    if edge_kinds is not None and edge.kind not in edge_kinds:
+                        continue
+                    if edge.to_id not in included_nodes:
+                        included_nodes.add(edge.to_id)
+                        next_frontier.append(edge.to_id)
+                for edge in self.in_edges(nid):
+                    if edge_kinds is not None and edge.kind not in edge_kinds:
+                        continue
+                    if edge.from_id not in included_nodes:
+                        included_nodes.add(edge.from_id)
+                        next_frontier.append(edge.from_id)
+            frontier = next_frontier
+            depth += 1
+
+        subgraph = MemoryGraph()
+        for nid in sorted(included_nodes):
+            node = self._nodes[nid]
+            subgraph.add_node(node)
+        for edge in self._edges.values():
+            if (
+                edge.from_id in included_nodes
+                and edge.to_id in included_nodes
+                and (edge_kinds is None or edge.kind in edge_kinds)
+            ):
+                subgraph.add_edge(edge)
+        return subgraph
+
+    def neighborhood(
+        self, node_id: MemoryId, *, radius: int = 1
+    ) -> tuple[list[MemoryNode], list[MemoryEdge]]:
+        """Return nodes and edges within radius hops of a node.
+
+        The center node is included in the node list. Returns empty lists
+        if the node does not exist.
+        """
+        if radius < 0:
+            raise ValueError("radius must be non-negative")
+        if node_id not in self._nodes:
+            return [], []
+        visited: set[MemoryId] = {node_id}
+        frontier = [node_id]
+        edges: list[MemoryEdge] = []
+        depth = 0
+        while frontier and depth < radius:
+            next_frontier: list[MemoryId] = []
+            for nid in frontier:
+                for edge in self.out_edges(nid) + self.in_edges(nid):
+                    edges.append(edge)
+                    neighbor = edge.to_id if edge.from_id == nid else edge.from_id
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        next_frontier.append(neighbor)
+            frontier = next_frontier
+            depth += 1
+        nodes = [self._nodes[nid] for nid in sorted(visited) if nid in self._nodes]
+        seen_edges: set[MemoryId] = set()
+        unique_edges: list[MemoryEdge] = []
+        for edge in edges:
+            if edge.edge_id not in seen_edges:
+                seen_edges.add(edge.edge_id)
+                unique_edges.append(edge)
+        return nodes, unique_edges
