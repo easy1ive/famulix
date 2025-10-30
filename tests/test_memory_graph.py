@@ -487,3 +487,90 @@ def test_memory_graph_edge_count_tracks_all_edges() -> None:
     for i in range(4):
         graph.add_edge(MemoryEdge.create(nodes[i].node_id, nodes[i + 1].node_id, "next"))
     assert graph.edge_count() == 4
+
+
+def test_extract_subgraph_includes_seeds_and_neighbors() -> None:
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "seed", "content", created_at_s=100)
+    n2 = MemoryNode.create("fact", "neighbor", "content", created_at_s=200)
+    n3 = MemoryNode.create("fact", "distant", "content", created_at_s=300)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    graph.add_node(n3)
+    graph.add_edge(MemoryEdge.create(n1.node_id, n2.node_id, "mentions"))
+    graph.add_edge(MemoryEdge.create(n2.node_id, n3.node_id, "mentions"))
+    subgraph = graph.extract_subgraph([n1.node_id], max_depth=1)
+    assert subgraph.node_count() == 2
+    assert subgraph.has_node(n1.node_id)
+    assert subgraph.has_node(n2.node_id)
+    assert not subgraph.has_node(n3.node_id)
+    assert subgraph.edge_count() == 1
+
+
+def test_extract_subgraph_respects_depth_limit() -> None:
+    graph = MemoryGraph()
+    chain = [MemoryNode.create("fact", f"n{i}", "body", created_at_s=i * 100) for i in range(4)]
+    for node in chain:
+        graph.add_node(node)
+    for i in range(3):
+        graph.add_edge(MemoryEdge.create(chain[i].node_id, chain[i + 1].node_id, "derived_from"))
+    subgraph = graph.extract_subgraph([chain[0].node_id], max_depth=2)
+    assert subgraph.node_count() == 3
+    assert subgraph.has_node(chain[0].node_id)
+    assert subgraph.has_node(chain[1].node_id)
+    assert subgraph.has_node(chain[2].node_id)
+    assert not subgraph.has_node(chain[3].node_id)
+
+
+def test_extract_subgraph_filters_edge_kinds() -> None:
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "a", "body", created_at_s=100)
+    n2 = MemoryNode.create("entity", "b", "body", created_at_s=200)
+    n3 = MemoryNode.create("episode", "c", "body", created_at_s=300)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    graph.add_node(n3)
+    graph.add_edge(MemoryEdge.create(n1.node_id, n2.node_id, "mentions"))
+    graph.add_edge(MemoryEdge.create(n1.node_id, n3.node_id, "part_of"))
+    subgraph = graph.extract_subgraph([n1.node_id], max_depth=1, edge_kinds={"mentions"})
+    assert subgraph.node_count() == 2
+    assert subgraph.has_node(n2.node_id)
+    assert not subgraph.has_node(n3.node_id)
+
+
+def test_extract_subgraph_validates_depth() -> None:
+    graph = MemoryGraph()
+    with pytest.raises(ValueError, match="non-negative"):
+        graph.extract_subgraph([], max_depth=-1)
+
+
+def test_neighborhood_returns_nodes_and_edges() -> None:
+    graph = MemoryGraph()
+    center = MemoryNode.create("fact", "center", "body", created_at_s=100)
+    neighbor = MemoryNode.create("entity", "neighbor", "body", created_at_s=200)
+    distant = MemoryNode.create("episode", "distant", "body", created_at_s=300)
+    graph.add_node(center)
+    graph.add_node(neighbor)
+    graph.add_node(distant)
+    e1 = MemoryEdge.create(center.node_id, neighbor.node_id, "mentions")
+    e2 = MemoryEdge.create(neighbor.node_id, distant.node_id, "mentions")
+    graph.add_edge(e1)
+    graph.add_edge(e2)
+    nodes, edges = graph.neighborhood(center.node_id, radius=1)
+    assert len(nodes) == 2
+    assert {n.node_id for n in nodes} == {center.node_id, neighbor.node_id}
+    assert len(edges) == 1
+    assert edges[0].edge_id == e1.edge_id
+
+
+def test_neighborhood_missing_node_returns_empty() -> None:
+    graph = MemoryGraph()
+    nodes, edges = graph.neighborhood("nonexistent", radius=1)
+    assert nodes == []
+    assert edges == []
+
+
+def test_neighborhood_validates_radius() -> None:
+    graph = MemoryGraph()
+    with pytest.raises(ValueError, match="non-negative"):
+        graph.neighborhood("x", radius=-1)
