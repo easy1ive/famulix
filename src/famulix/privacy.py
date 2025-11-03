@@ -400,3 +400,93 @@ def _sets_overlap(left: set[str], right: set[str]) -> bool:
     if "*" in left or "*" in right:
         return True
     return bool(left & right)
+
+
+def _set_intersection(left: set[str], right: set[str]) -> set[str]:
+    """Return the concrete overlap between two policy dimensions.
+
+    Empty sets and wildcards ("*") overlap with everything, so the non-empty
+    concrete set is returned when one side is wildcard/empty. Returns {"*"}
+    when both sides are empty or wildcard.
+    """
+    if not left and not right:
+        return {"*"}
+    if not left or "*" in left:
+        return right if right else {"*"}
+    if not right or "*" in right:
+        return left
+    return left & right
+
+
+@dataclass(frozen=True)
+class ConflictDiagnostic:
+    """Detailed report of a policy rule conflict."""
+
+    rule_a_id: str
+    rule_b_id: str
+    rule_a_effect: str
+    rule_b_effect: str
+    priority: int
+    overlapping_actions: frozenset[str]
+    overlapping_resources: frozenset[str]
+    overlapping_tiers: frozenset[str]
+
+    def sample_request(self) -> dict[str, str] | None:
+        """Return one concrete request both rules would match, or None."""
+        if (
+            not self.overlapping_actions
+            or not self.overlapping_resources
+            or not self.overlapping_tiers
+        ):
+            return None
+        action = sorted(self.overlapping_actions)[0]
+        resource = sorted(self.overlapping_resources)[0]
+        tier = sorted(self.overlapping_tiers)[0]
+        if action == "*" or resource == "*" or tier == "*":
+            return None
+        return {"action": action, "resource": resource, "tier": tier}
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "rule_a_id": self.rule_a_id,
+            "rule_b_id": self.rule_b_id,
+            "rule_a_effect": self.rule_a_effect,
+            "rule_b_effect": self.rule_b_effect,
+            "priority": self.priority,
+            "overlapping_actions": sorted(self.overlapping_actions),
+            "overlapping_resources": sorted(self.overlapping_resources),
+            "overlapping_tiers": sorted(self.overlapping_tiers),
+        }
+
+
+def diagnose_conflicts(engine: PolicyEngine) -> list[ConflictDiagnostic]:
+    """Produce detailed diagnostics for every conflicting rule pair.
+
+    The diagnostics include the concrete overlap sets so administrators can
+    see which requests would produce ambiguous decisions. The sample_request
+    method returns one such request for reproduction.
+    """
+    diagnostics: list[ConflictDiagnostic] = []
+    rules = engine._rules  # noqa: SLF001
+    for i in range(len(rules)):
+        for j in range(i + 1, len(rules)):
+            a, b = rules[i], rules[j]
+            if a.priority != b.priority or a.effect == b.effect:
+                continue
+            actions = _set_intersection(a.actions, b.actions)
+            resources = _set_intersection(a.resources, b.resources)
+            tiers = _set_intersection(a.tiers, b.tiers)
+            if actions and resources and tiers:
+                diagnostics.append(
+                    ConflictDiagnostic(
+                        rule_a_id=a.id,
+                        rule_b_id=b.id,
+                        rule_a_effect=a.effect,
+                        rule_b_effect=b.effect,
+                        priority=a.priority,
+                        overlapping_actions=frozenset(actions),
+                        overlapping_resources=frozenset(resources),
+                        overlapping_tiers=frozenset(tiers),
+                    )
+                )
+    return diagnostics

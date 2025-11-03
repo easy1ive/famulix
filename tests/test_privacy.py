@@ -667,3 +667,117 @@ def test_privacy_gate_allows_matching_clearance() -> None:
         timestamp_s=100,
     )
     assert decision.allowed
+
+
+def test_diagnose_conflicts_reports_overlap() -> None:
+    from famulix.privacy import PolicyEngine, PolicyRule, diagnose_conflicts
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="allow-read",
+            effect="allow",
+            actions={"read"},
+            resources={"notes"},
+            tiers={"personal"},
+            priority=10,
+        )
+    )
+    engine.add_rule(
+        PolicyRule(
+            id="deny-read",
+            effect="deny",
+            actions={"read"},
+            resources={"notes"},
+            tiers={"personal"},
+            priority=10,
+        )
+    )
+    diagnostics = diagnose_conflicts(engine)
+    assert len(diagnostics) == 1
+    diag = diagnostics[0]
+    assert diag.rule_a_id == "allow-read"
+    assert diag.rule_b_id == "deny-read"
+    assert diag.overlapping_actions == frozenset({"read"})
+    sample = diag.sample_request()
+    assert sample == {"action": "read", "resource": "notes", "tier": "personal"}
+
+
+def test_diagnose_conflicts_handles_wildcards() -> None:
+    from famulix.privacy import PolicyEngine, PolicyRule, diagnose_conflicts
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="allow-all",
+            effect="allow",
+            actions=set(),
+            resources=set(),
+            tiers=set(),
+            priority=5,
+        )
+    )
+    engine.add_rule(
+        PolicyRule(
+            id="deny-write",
+            effect="deny",
+            actions={"write"},
+            resources={"notes"},
+            tiers={"private"},
+            priority=5,
+        )
+    )
+    diagnostics = diagnose_conflicts(engine)
+    assert len(diagnostics) == 1
+    diag = diagnostics[0]
+    assert "write" in diag.overlapping_actions
+    assert "notes" in diag.overlapping_resources
+    assert "private" in diag.overlapping_tiers
+
+
+def test_diagnose_conflicts_skips_different_priorities() -> None:
+    from famulix.privacy import PolicyEngine, PolicyRule, diagnose_conflicts
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="high", effect="allow", actions={"read"}, resources={"*"}, tiers={"*"}, priority=10
+        )
+    )
+    engine.add_rule(
+        PolicyRule(
+            id="low", effect="deny", actions={"read"}, resources={"*"}, tiers={"*"}, priority=5
+        )
+    )
+    assert diagnose_conflicts(engine) == []
+
+
+def test_conflict_diagnostic_to_dict() -> None:
+    from famulix.privacy import PolicyEngine, PolicyRule, diagnose_conflicts
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="a",
+            effect="allow",
+            actions={"read"},
+            resources={"notes"},
+            tiers={"personal"},
+            priority=1,
+        )
+    )
+    engine.add_rule(
+        PolicyRule(
+            id="b",
+            effect="deny",
+            actions={"read"},
+            resources={"notes"},
+            tiers={"personal"},
+            priority=1,
+        )
+    )
+    diagnostics = diagnose_conflicts(engine)
+    assert len(diagnostics) == 1
+    d = diagnostics[0].to_dict()
+    assert d["rule_a_id"] == "a"
+    assert d["overlapping_actions"] == ["read"]
