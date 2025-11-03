@@ -357,14 +357,37 @@ def parse_query(text: str) -> dict[str, object]:
     - kind:fact → filter by node kind
     - since:YYYY-MM-DD → time window start
     - until:YYYY-MM-DD → time window end
+    - "quoted phrase" → exact phrase match (stored in phrases)
+    - -term → negated term (excluded from results)
     """
     terms: list[str] = []
+    phrases: list[str] = []
+    negated: list[str] = []
     kinds: list[str] = []
     tags: list[str] = []
     since: str | None = None
     until: str | None = None
+
+    in_quote = False
+    current_phrase: list[str] = []
     for part in text.split():
-        if part.startswith("kind:"):
+        if in_quote:
+            if part.endswith('"'):
+                current_phrase.append(part[:-1])
+                phrases.append(" ".join(current_phrase))
+                current_phrase = []
+                in_quote = False
+            else:
+                current_phrase.append(part)
+        elif part.startswith('"'):
+            if part.endswith('"') and len(part) > 1:
+                phrases.append(part[1:-1])
+            else:
+                current_phrase.append(part[1:])
+                in_quote = True
+        elif part.startswith("-") and len(part) > 1:
+            negated.append(part[1:])
+        elif part.startswith("kind:"):
             kinds.append(part[len("kind:") :])
         elif part.startswith("tag:"):
             tags.append(part[len("tag:") :])
@@ -374,7 +397,17 @@ def parse_query(text: str) -> dict[str, object]:
             until = part[len("until:") :]
         else:
             terms.append(part)
-    return {"terms": terms, "kinds": kinds, "tags": tags, "since": since, "until": until}
+    if current_phrase:
+        phrases.append(" ".join(current_phrase))
+    return {
+        "terms": terms,
+        "phrases": phrases,
+        "negated": negated,
+        "kinds": kinds,
+        "tags": tags,
+        "since": since,
+        "until": until,
+    }
 
 
 def query_with_filters(
@@ -394,6 +427,10 @@ def query_with_filters(
     kinds = [str(kind) for kind in raw_kinds] if isinstance(raw_kinds, list) and raw_kinds else None
     raw_tags = parsed.get("tags")
     tags = {str(tag) for tag in raw_tags} if isinstance(raw_tags, list) else set()
+    raw_phrases = parsed.get("phrases")
+    phrases = [str(p) for p in raw_phrases] if isinstance(raw_phrases, list) else []
+    raw_negated = parsed.get("negated")
+    negated = [str(n) for n in raw_negated] if isinstance(raw_negated, list) else []
 
     results = hybrid_score(
         terms or query_text,
@@ -413,6 +450,28 @@ def query_with_filters(
             if str(node.metadata.get("tag", "")) in tags:
                 tagged.append(result)
         results = tagged
+
+    if phrases:
+        phrase_filtered: list[RetrievalResult] = []
+        for result in results:
+            node = graph.get_node(result.node_id)
+            if node is None:
+                continue
+            text_lower = f"{node.title} {node.body}".lower()
+            if all(phrase.lower() in text_lower for phrase in phrases):
+                phrase_filtered.append(result)
+        results = phrase_filtered
+
+    if negated:
+        neg_filtered: list[RetrievalResult] = []
+        for result in results:
+            node = graph.get_node(result.node_id)
+            if node is None:
+                continue
+            text_lower = f"{node.title} {node.body}".lower()
+            if not any(term.lower() in text_lower for term in negated):
+                neg_filtered.append(result)
+        results = neg_filtered
 
     return results[:max_results]
 

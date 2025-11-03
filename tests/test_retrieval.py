@@ -294,6 +294,8 @@ def test_parse_query_of_blank_input_yields_empty_filters() -> None:
 
     assert parse_query("") == {
         "terms": [],
+        "phrases": [],
+        "negated": [],
         "kinds": [],
         "tags": [],
         "since": None,
@@ -469,3 +471,80 @@ def test_bm25_prune_stale_removes_dead_entries() -> None:
     assert pruned == 2
     assert idx.doc_count == 1
     assert "live" in idx.docs
+
+
+def test_parse_query_handles_quoted_phrases() -> None:
+    from famulix.retrieval import parse_query
+
+    parsed = parse_query('find "important meeting" notes')
+    assert parsed["terms"] == ["find", "notes"]
+    assert parsed["phrases"] == ["important meeting"]
+
+
+def test_parse_query_handles_negated_terms() -> None:
+    from famulix.retrieval import parse_query
+
+    parsed = parse_query("search -spam -junk relevant")
+    assert parsed["terms"] == ["search", "relevant"]
+    assert parsed["negated"] == ["spam", "junk"]
+
+
+def test_parse_query_handles_multi_word_quotes() -> None:
+    from famulix.retrieval import parse_query
+
+    parsed = parse_query('"project deadline" "team meeting"')
+    assert parsed["phrases"] == ["project deadline", "team meeting"]
+    assert parsed["terms"] == []
+
+
+def test_parse_query_handles_unclosed_quotes() -> None:
+    from famulix.retrieval import parse_query
+
+    parsed = parse_query('"unclosed phrase with words')
+    assert parsed["phrases"] == ["unclosed phrase with words"]
+
+
+def test_query_with_filters_applies_phrase_filter() -> None:
+    from famulix.retrieval import (
+        BM25Index,
+        MemoryGraph,
+        MemoryNode,
+        query_with_filters,
+    )
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "important meeting", "schedule review", created_at_s=1000)
+    n2 = MemoryNode.create("fact", "casual chat", "informal discussion", created_at_s=2000)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    index = BM25Index()
+    index.add_node(n1)
+    index.add_node(n2)
+    results = query_with_filters(
+        '"important meeting"',
+        graph=graph,
+        index=index,
+        now_s=3000,
+    )
+    assert len(results) == 1
+    assert results[0].node_id == n1.node_id
+
+
+def test_query_with_filters_applies_negation() -> None:
+    from famulix.retrieval import BM25Index, MemoryGraph, MemoryNode, query_with_filters
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "project update", "progress report", created_at_s=1000)
+    n2 = MemoryNode.create("fact", "spam message", "junk content", created_at_s=2000)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    index = BM25Index()
+    index.add_node(n1)
+    index.add_node(n2)
+    results = query_with_filters(
+        "-spam update",
+        graph=graph,
+        index=index,
+        now_s=3000,
+    )
+    assert all(r.node_id != n2.node_id for r in results)
