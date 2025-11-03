@@ -43,6 +43,45 @@ class ConsolidationReport:
             "total_changes": self.total_changes(),
         }
 
+    def to_markdown(self) -> str:
+        """Render the report as deterministic Markdown.
+
+        Output is stable for a given report state and escapes no special
+        characters beyond what Markdown requires. Sections are omitted when
+        empty so the format stays concise.
+        """
+        lines: list[str] = ["# Consolidation Report", ""]
+        lines.append(f"**Total changes:** {self.total_changes()}")
+        lines.append(f"**Contradictions resolved:** {self.contradictions_resolved}")
+        lines.append("")
+
+        if self.merged_pairs:
+            lines.append("## Merged duplicates")
+            lines.append("")
+            for winner_id, loser_id in sorted(self.merged_pairs):
+                lines.append(f"- `{winner_id}` ← `{loser_id}`")
+            lines.append("")
+
+        if self.superseded:
+            lines.append("## Superseded facts")
+            lines.append("")
+            for node_id in sorted(self.superseded):
+                lines.append(f"- `{node_id}`")
+            lines.append("")
+
+        if self.summary_nodes:
+            lines.append("## Episode summaries")
+            lines.append("")
+            for node_id in sorted(self.summary_nodes):
+                lines.append(f"- `{node_id}`")
+            lines.append("")
+
+        if self.is_empty:
+            lines.append("No changes were made during this consolidation run.")
+            lines.append("")
+
+        return "\n".join(lines)
+
 
 def _normalized_text(node: MemoryNode) -> str:
     text = f"{node.title} {node.body}".lower()

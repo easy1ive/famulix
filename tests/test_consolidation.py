@@ -486,3 +486,45 @@ def test_consolidate_graph_is_idempotent() -> None:
     report1 = consolidate_graph(graph, dedup_threshold=0.7)
     report2 = consolidate_graph(graph, dedup_threshold=0.7)
     assert report2.total_changes() == 0 or report2.total_changes() <= report1.total_changes()
+
+
+def test_consolidation_report_to_markdown_empty() -> None:
+    from famulix.consolidation import ConsolidationReport
+
+    report = ConsolidationReport()
+    md = report.to_markdown()
+    assert "# Consolidation Report" in md
+    assert "**Total changes:** 0" in md
+    assert "No changes were made" in md
+
+
+def test_consolidation_report_to_markdown_with_merges() -> None:
+    from famulix.consolidation import ConsolidationReport
+
+    report = ConsolidationReport(
+        merged_pairs=[("mem_abc", "mem_def"), ("mem_ghi", "mem_jkl")],
+        superseded=["mem_old"],
+        contradictions_resolved=1,
+        summary_nodes=["mem_summary1"],
+    )
+    md = report.to_markdown()
+    assert "## Merged duplicates" in md
+    assert "`mem_abc` ← `mem_def`" in md
+    assert "## Superseded facts" in md
+    assert "`mem_old`" in md
+    assert "## Episode summaries" in md
+    assert "`mem_summary1`" in md
+    assert "**Total changes:** 4" in md
+
+
+def test_consolidation_report_markdown_is_deterministic() -> None:
+    from famulix.consolidation import ConsolidationReport
+
+    report = ConsolidationReport(
+        merged_pairs=[("mem_b", "mem_a"), ("mem_d", "mem_c")],
+        superseded=["mem_z", "mem_x"],
+    )
+    first = report.to_markdown()
+    second = report.to_markdown()
+    assert first == second
+    assert "No changes were made" not in first
