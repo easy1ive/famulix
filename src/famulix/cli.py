@@ -57,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_recall.add_argument("--seed", type=int, default=0, help="seed for demo graph")
     p_recall.add_argument("--days", type=_positive_int, default=30, help="days for demo graph")
     p_recall.add_argument("-k", type=_positive_int, default=10, help="top-k results")
+    p_recall.add_argument("--json", action="store_true", help="output as JSON")
 
     # brief
     p_brief = sub.add_parser("brief", help="generate a daily briefing")
@@ -235,12 +236,34 @@ def cmd_recall(args: argparse.Namespace) -> int:
             idx.add_node(node)
     query = args.query or "important facts"
     results = hybrid_score(query, graph=graph, index=idx, now_s=now_s)
-    print(f"Top {args.k} results for: {query}")
-    for i, r in enumerate(results[: args.k]):
-        result_node = graph.get_node(r.node_id)
-        if result_node is None:
-            continue
-        print(f"  {i + 1}. [{result_node.kind}] {result_node.title} (score={r.score:.4f})")
+    top_results = results[: args.k]
+
+    if getattr(args, "json", False):
+        output = {
+            "query": query,
+            "persona": args.persona,
+            "seed": args.seed,
+            "days": args.days,
+            "results": [
+                {
+                    "rank": i + 1,
+                    "node_id": r.node_id,
+                    "kind": graph.get_node(r.node_id).kind if graph.get_node(r.node_id) else None,
+                    "title": graph.get_node(r.node_id).title if graph.get_node(r.node_id) else None,
+                    "score": r.score,
+                    "citation": r.citation,
+                }
+                for i, r in enumerate(top_results)
+            ],
+        }
+        print(json.dumps(output, indent=2, ensure_ascii=False))
+    else:
+        print(f"Top {args.k} results for: {query}")
+        for i, r in enumerate(top_results):
+            result_node = graph.get_node(r.node_id)
+            if result_node is None:
+                continue
+            print(f"  {i + 1}. [{result_node.kind}] {result_node.title} (score={r.score:.4f})")
     return 0
 
 
