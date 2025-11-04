@@ -178,7 +178,7 @@ def test_plan_json_roundtrip_has_versioned_golden_shape() -> None:
     plan = Plan(plan_id="daily", steps=[PlanStep(id="read", tool="echo", inputs={"text": "hi"})])
     payload = plan.to_json()
     expected = (
-        '{"metadata":{},"plan_id":"daily","schema_version":1,'
+        '{"max_budget":0.0,"metadata":{},"plan_id":"daily","schema_version":1,'
         '"steps":[{"budget":0.0,"depends_on":[],"effects":[],"id":"read",'
         '"input_types":{},"inputs":{"text":"hi"},"output_types":{},"preconditions":[],'
         '"timeout_s":5.0,"tool":"echo"}],"version":1}'
@@ -416,3 +416,69 @@ def test_plan_diff_detects_added_removed_modified() -> None:
     assert "s3" in diff["added"]
     assert "s2" in diff["removed"]
     assert "s1" in diff["modified"]
+
+
+def test_plan_total_step_budget() -> None:
+    from famulix.plan_dsl import Plan, PlanStep
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(id="s1", tool="t1", budget=10.0),
+            PlanStep(id="s2", tool="t2", budget=20.0),
+            PlanStep(id="s3", tool="t3", budget=5.0),
+        ],
+    )
+    assert plan.total_step_budget() == 35.0
+
+
+def test_plan_budget_validation_rejects_negative_max_budget() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_plan
+
+    plan = Plan(plan_id="p1", steps=[PlanStep(id="s1", tool="t1")], max_budget=-1.0)
+    result = validate_plan(plan)
+    assert not result.valid
+    assert any("max_budget" in e for e in result.errors)
+
+
+def test_plan_budget_validation_rejects_exceeding_budget() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_plan
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(id="s1", tool="t1", budget=50.0),
+            PlanStep(id="s2", tool="t2", budget=60.0),
+        ],
+        max_budget=100.0,
+    )
+    result = validate_plan(plan)
+    assert not result.valid
+    assert any("exceed" in e for e in result.errors)
+
+
+def test_plan_budget_validation_passes_within_budget() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_plan
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(id="s1", tool="t1", budget=30.0),
+            PlanStep(id="s2", tool="t2", budget=40.0),
+        ],
+        max_budget=100.0,
+    )
+    result = validate_plan(plan)
+    assert result.valid
+
+
+def test_plan_budget_zero_means_no_cap() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_plan
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[PlanStep(id="s1", tool="t1", budget=1000.0)],
+        max_budget=0.0,
+    )
+    result = validate_plan(plan)
+    assert result.valid
