@@ -209,3 +209,48 @@ def test_trigger_log_records_suppressed_events() -> None:
     assert log.entry_count() == 2
     assert log.count_by_action("suppressed") == 1
     assert log.count_by_action("generated") == 1
+
+
+def test_cooldown_tracker_records_and_checks() -> None:
+    from famulix.triggers import CooldownTracker
+
+    tracker = CooldownTracker()
+    tracker.record_trigger("mem_1", 1000)
+    assert tracker.is_in_cooldown("mem_1", 1500, cooldown_seconds=1000)
+    assert not tracker.is_in_cooldown("mem_1", 2000, cooldown_seconds=1000)
+    assert not tracker.is_in_cooldown("mem_2", 1500, cooldown_seconds=1000)
+
+
+def test_cooldown_tracker_clears_expired() -> None:
+    from famulix.triggers import CooldownTracker
+
+    tracker = CooldownTracker()
+    tracker.record_trigger("mem_1", 1000)
+    tracker.record_trigger("mem_2", 2000)
+    tracker.record_trigger("mem_3", 3000)
+    removed = tracker.clear_expired(now_s=3500, cooldown_seconds=1000)
+    assert removed == 2
+    assert "mem_1" not in tracker.last_triggered
+    assert "mem_2" not in tracker.last_triggered
+    assert "mem_3" in tracker.last_triggered
+
+
+def test_cooldown_tracker_persistence_roundtrip() -> None:
+    from famulix.triggers import CooldownTracker
+
+    tracker = CooldownTracker()
+    tracker.record_trigger("mem_a", 500)
+    tracker.record_trigger("mem_b", 1500)
+    data = tracker.to_dict()
+    restored = CooldownTracker.from_dict(data)
+    assert restored.last_triggered == tracker.last_triggered
+    assert restored.is_in_cooldown("mem_a", 600, cooldown_seconds=200)
+
+
+def test_cooldown_tracker_from_dict_validates_types() -> None:
+    import pytest
+
+    from famulix.triggers import CooldownTracker
+
+    with pytest.raises(ValueError, match="strings to integers"):
+        CooldownTracker.from_dict({"mem": "not_an_int"})
