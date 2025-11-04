@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from famulix.decay import (
     DecayConfig,
     apply_decay,
@@ -111,7 +113,13 @@ def test_protected_nodes_survive_property() -> None:
 
 
 def test_half_life_actually_fifty_percent() -> None:
-    cfg = DecayConfig(warm_half_life_s=1000, grace_period_s=0)
+    cfg = DecayConfig(
+        hot_half_life_s=100,
+        warm_half_life_s=1000,
+        cold_half_life_s=5000,
+        archive_half_life_s=10000,
+        grace_period_s=0,
+    )
     node = MemoryNode.create("fact", "t", "b", created_at_s=0, metadata={"tier": "warm"})
     r = retention_score(node, now_s=1000, config=cfg)
     assert 0.49 < r < 0.51
@@ -147,3 +155,48 @@ def test_promote_then_demote_roundtrip_at_mid_tiers() -> None:
     # Make a node with the promoted tier
     promoted_node = MemoryNode.create("fact", "p", "b", metadata={"tier": promoted})
     assert demote_tier(promoted_node) == "warm"
+
+
+def test_decay_config_rejects_non_positive_half_lives() -> None:
+    from famulix.decay import DecayConfig
+
+    with pytest.raises(ValueError, match="positive"):
+        DecayConfig(hot_half_life_s=0)
+    with pytest.raises(ValueError, match="positive"):
+        DecayConfig(warm_half_life_s=-100)
+
+
+def test_decay_config_rejects_wrong_ordering() -> None:
+    from famulix.decay import DecayConfig
+
+    with pytest.raises(ValueError, match="ordered"):
+        DecayConfig(hot_half_life_s=86400 * 10, warm_half_life_s=86400 * 7)
+    with pytest.raises(ValueError, match="ordered"):
+        DecayConfig(cold_half_life_s=86400 * 5, archive_half_life_s=86400 * 4)
+
+
+def test_decay_config_rejects_invalid_grace_period() -> None:
+    from famulix.decay import DecayConfig
+
+    with pytest.raises(ValueError, match="non-negative"):
+        DecayConfig(grace_period_s=-1)
+
+
+def test_decay_config_rejects_invalid_tombstone_threshold() -> None:
+    from famulix.decay import DecayConfig
+
+    with pytest.raises(ValueError, match="threshold"):
+        DecayConfig(tombstone_threshold=0)
+    with pytest.raises(ValueError, match="threshold"):
+        DecayConfig(tombstone_threshold=1.0)
+    with pytest.raises(ValueError, match="threshold"):
+        DecayConfig(tombstone_threshold=1.5)
+
+
+def test_decay_config_default_is_valid() -> None:
+    from famulix.decay import DecayConfig
+
+    config = DecayConfig()
+    assert config.hot_half_life_s < config.warm_half_life_s
+    assert config.warm_half_life_s < config.cold_half_life_s
+    assert config.cold_half_life_s < config.archive_half_life_s
