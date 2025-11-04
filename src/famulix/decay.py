@@ -21,6 +21,7 @@ class DecayConfig:
     """Retention curve parameters per tier.
 
     Half-life is the time in seconds after which retention drops to 50%.
+    Tiers must be ordered so hot decays fastest and archive slowest.
     """
 
     hot_half_life_s: float = 86400 * 1  # 1 day
@@ -29,6 +30,27 @@ class DecayConfig:
     archive_half_life_s: float = 86400 * 365  # 1 year
     grace_period_s: float = 3600  # memories younger than this never decay
     tombstone_threshold: float = 0.01  # retention below this → tombstone
+
+    def __post_init__(self) -> None:
+        half_lives = [
+            self.hot_half_life_s,
+            self.warm_half_life_s,
+            self.cold_half_life_s,
+            self.archive_half_life_s,
+        ]
+        if any(hl <= 0 for hl in half_lives):
+            raise ValueError("all half-lives must be positive")
+        if not (
+            self.hot_half_life_s
+            <= self.warm_half_life_s
+            <= self.cold_half_life_s
+            <= self.archive_half_life_s
+        ):
+            raise ValueError("half-lives must be ordered: hot <= warm <= cold <= archive")
+        if self.grace_period_s < 0:
+            raise ValueError("grace period must be non-negative")
+        if not 0 < self.tombstone_threshold < 1:
+            raise ValueError("tombstone threshold must be in (0, 1)")
 
 
 TIER_HALF_LIVES: dict[TierName, str] = {
