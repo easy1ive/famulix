@@ -306,3 +306,40 @@ def test_cli_demo_runs_end_to_end() -> None:
     )
     assert result.returncode == 0
     assert len(result.stdout) > 0
+
+
+def test_recall_json_output() -> None:
+    import io
+    import json
+    import sys
+    from unittest.mock import patch
+
+    from famulix.cli import main
+
+    captured = io.StringIO()
+    with patch.object(sys, "stdout", captured):
+        exit_code = main(
+            [
+                "recall",
+                "meeting",
+                "--persona",
+                "alex",
+                "--seed",
+                "1",
+                "--days",
+                "7",
+                "-k",
+                "3",
+                "--json",
+            ]
+        )
+    assert exit_code == 0
+    output = json.loads(captured.getvalue())
+    assert "query" in output
+    assert output["query"] == "meeting"
+    assert "results" in output
+    assert len(output["results"]) <= 3
+    if output["results"]:
+        assert "rank" in output["results"][0]
+        assert "node_id" in output["results"][0]
+        assert "score" in output["results"][0]
