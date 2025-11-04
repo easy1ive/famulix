@@ -71,3 +71,15 @@ Core modules form a layered dependency graph:
 - **Evaluation**: `evaluation`, `factory` depend on most modules for end-to-end scenarios
 
 Optional `salience_torch` provides trainable rank-fusion models and is imported only when the `torch` extra is installed.
+
+## Subgraph and neighborhood extraction
+
+The memory graph supports bounded-depth subgraph extraction around seed nodes, filtering by edge kinds. Neighborhood queries return all nodes and edges within a given radius of a center node. These operations support provenance tracing, local context assembly, and graph partitioning for incremental processing.
+
+## Enhanced query parsing
+
+The retrieval query parser supports quoted phrases for exact matching, negated terms (prefixed with `-`) for exclusion, structured filters (kind, tag, time window), and graceful handling of unclosed quotes. Phrase and negation filters apply after initial scoring to refine result sets.
+
+## Policy conflict diagnostics
+
+The privacy policy engine provides detailed conflict diagnostics for rule pairs that could produce ambiguous decisions. Diagnostics include concrete overlap sets across actions, resources, and tiers, plus sample requests that both rules would match. Administrators can use these diagnostics to identify and resolve policy ambiguities before deployment.
