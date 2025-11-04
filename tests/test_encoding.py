@@ -261,3 +261,58 @@ def test_day_segment_handles_dst_boundary() -> None:
     segments = day_segment(events, tz_offset_hours=8)
     assert isinstance(segments, dict)
     assert len(segments) >= 1
+
+
+def test_validate_alias_table_default_is_valid() -> None:
+    from famulix.encoding import DEFAULT_ALIASES, validate_alias_table
+
+    assert validate_alias_table(DEFAULT_ALIASES) == []
+
+
+def test_validate_alias_table_rejects_empty_entity_id() -> None:
+    from famulix.encoding import validate_alias_table
+
+    problems = validate_alias_table({"": ["alice"]})
+    assert len(problems) == 1
+    assert "non-empty" in problems[0]
+
+
+def test_validate_alias_table_rejects_empty_alias_list() -> None:
+    from famulix.encoding import validate_alias_table
+
+    problems = validate_alias_table({"alice": []})
+    assert len(problems) == 1
+    assert "at least one alias" in problems[0]
+
+
+def test_validate_alias_table_rejects_empty_alias_string() -> None:
+    from famulix.encoding import validate_alias_table
+
+    problems = validate_alias_table({"alice": [""]})
+    assert len(problems) == 1
+    assert "invalid alias" in problems[0]
+
+
+def test_validate_alias_table_detects_ambiguous_aliases() -> None:
+    from famulix.encoding import validate_alias_table
+
+    problems = validate_alias_table(
+        {
+            "alice": ["alice", "A"],
+            "alicia": ["A", "alicia"],
+        }
+    )
+    assert len(problems) == 1
+    assert "appears under both" in problems[0]
+
+
+def test_validate_alias_table_is_case_insensitive() -> None:
+    from famulix.encoding import validate_alias_table
+
+    problems = validate_alias_table(
+        {
+            "alice": ["Alice"],
+            "alicia": ["alice"],
+        }
+    )
+    assert len(problems) == 1

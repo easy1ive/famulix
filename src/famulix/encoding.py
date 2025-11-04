@@ -54,6 +54,39 @@ DEFAULT_ALIASES: dict[str, list[str]] = {
 }
 
 
+def validate_alias_table(aliases: dict[str, list[str]]) -> list[str]:
+    """Validate an alias table and return any problems found.
+
+    Rules:
+    - Entity ids must be non-empty strings.
+    - Each entity must have at least one alias.
+    - Aliases must be non-empty strings.
+    - No alias may appear under multiple entity ids (ambiguity).
+    """
+    problems: list[str] = []
+    seen_aliases: dict[str, str] = {}
+
+    for eid, alias_list in aliases.items():
+        if not isinstance(eid, str) or not eid.strip():
+            problems.append(f"entity id must be a non-empty string, got {eid!r}")
+            continue
+        if not isinstance(alias_list, list) or not alias_list:
+            problems.append(f"entity {eid!r} must have at least one alias")
+            continue
+        for alias in alias_list:
+            if not isinstance(alias, str) or not alias.strip():
+                problems.append(f"entity {eid!r} has invalid alias: {alias!r}")
+                continue
+            normalized = alias.lower().strip()
+            if normalized in seen_aliases and seen_aliases[normalized] != eid:
+                other = seen_aliases[normalized]
+                problems.append(f"alias {alias!r} appears under both {eid!r} and {other!r}")
+            else:
+                seen_aliases[normalized] = eid
+
+    return problems
+
+
 def extract_entities(text: str, aliases: dict[str, list[str]] | None = None) -> list[EntityId]:
     """Rule-based entity mention extraction using an alias table.
 
