@@ -78,6 +78,47 @@ class TriggerLog:
         self.entries.clear()
 
 
+@dataclass
+class CooldownTracker:
+    """Tracks last-triggered times for each memory to enforce cooldowns.
+
+    Supports persistence across sessions via to_dict/from_dict.
+    """
+
+    last_triggered: dict[str, int] = field(default_factory=dict)
+
+    def record_trigger(self, memory_id: str, timestamp_s: int) -> None:
+        """Record that a memory was triggered at the given time."""
+        self.last_triggered[memory_id] = timestamp_s
+
+    def is_in_cooldown(self, memory_id: str, timestamp_s: int, cooldown_seconds: int) -> bool:
+        """Check if a memory is still in its cooldown period."""
+        if memory_id not in self.last_triggered:
+            return False
+        last = self.last_triggered[memory_id]
+        return (timestamp_s - last) < cooldown_seconds
+
+    def clear_expired(self, now_s: int, cooldown_seconds: int) -> int:
+        """Remove entries whose cooldown has expired. Returns count removed."""
+        expired = [
+            mid for mid, last in self.last_triggered.items() if (now_s - last) >= cooldown_seconds
+        ]
+        for mid in expired:
+            del self.last_triggered[mid]
+        return len(expired)
+
+    def to_dict(self) -> dict[str, int]:
+        """Serialize for persistence."""
+        return dict(self.last_triggered)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, int]) -> CooldownTracker:
+        """Deserialize from persisted state."""
+        if not all(isinstance(k, str) and isinstance(v, int) for k, v in data.items()):
+            raise ValueError("cooldown tracker data must map strings to integers")
+        return cls(last_triggered=dict(data))
+
+
 def _is_quiet_hour(timestamp_s: int, config: TriggerConfig) -> bool:
     """Check if a given timestamp falls within quiet hours (local time, UTC+8)."""
     from datetime import datetime, timedelta, timezone
