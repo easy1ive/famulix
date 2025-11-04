@@ -52,6 +52,11 @@ class Plan:
     version: int = 1
     steps: list[PlanStep] = field(default_factory=list)
     metadata: dict[str, str] = field(default_factory=dict)
+    max_budget: float = 0.0  # 0 means no plan-level budget cap
+
+    def total_step_budget(self) -> float:
+        """Sum of all step budgets."""
+        return sum(step.budget for step in self.steps)
 
     def step_ids(self) -> set[str]:
         return {s.id for s in self.steps}
@@ -75,6 +80,7 @@ class Plan:
             "version": self.version,
             "steps": [s.to_dict() for s in self.steps],
             "metadata": self.metadata,
+            "max_budget": self.max_budget,
         }
 
     @classmethod
@@ -82,7 +88,14 @@ class Plan:
         """Decode a versioned plan payload with strict record shapes."""
         if not isinstance(data, dict) or data.get("schema_version") != 1:
             raise ValueError("unsupported plan schema version")
-        if set(data) != {"schema_version", "plan_id", "version", "steps", "metadata"}:
+        if set(data) != {
+            "schema_version",
+            "plan_id",
+            "version",
+            "steps",
+            "metadata",
+            "max_budget",
+        }:
             raise ValueError("plan payload has unknown or missing fields")
         if not isinstance(data["plan_id"], str) or type(data["version"]) is not int:
             raise ValueError("plan identity and version have invalid types")
@@ -132,11 +145,15 @@ class Plan:
                 ):
                     raise ValueError(f"plan step {type_field} values must be strings")
             steps.append(PlanStep(**raw))
+        max_budget = data.get("max_budget", 0.0)
+        if not isinstance(max_budget, (int, float)):
+            raise ValueError("plan max_budget must be numeric")
         return cls(
             plan_id=data["plan_id"],
             version=data["version"],
             steps=steps,
             metadata=dict(data["metadata"]),
+            max_budget=float(max_budget),
         )
 
     def fingerprint(self) -> str:
@@ -208,6 +225,19 @@ def validate_plan(plan: Plan) -> ValidationResult:
         for dep in step.depends_on:
             if dep not in ids:
                 errors.append(f"step {step.id}: dangling dependency '{dep}'")
+
+    # Plan-level budget validation
+    if (
+        type(plan.max_budget) not in (int, float)
+        or not math.isfinite(plan.max_budget)
+        or plan.max_budget < 0
+    ):
+        errors.append("plan max_budget must be a non-negative finite number")
+    elif plan.max_budget > 0 and plan.total_step_budget() > plan.max_budget:
+        errors.append(
+            f"plan step budgets ({plan.total_step_budget():.2f}) "
+            f"exceed max_budget ({plan.max_budget:.2f})"
+        )
 
     # Cycle detection via Kahn's algorithm
     in_degree: dict[str, int] = {s.id: 0 for s in plan.steps}
