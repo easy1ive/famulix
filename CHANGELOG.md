@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hub collection (`collect_partial`).
 - `trim_to_budget` context fallback that never exceeds the token budget.
 - Golden digests for a small seeded persona history and a double-run
+- Subgraph extraction and neighborhood queries for memory graph traversal.
+- Enhanced query parser with quoted phrases, negated terms, and graceful
+  handling of unclosed quotes.
+- Policy conflict diagnostics with concrete overlap sets and sample requests.
+- Deterministic Markdown rendering for consolidation reports.
+- Decay configuration validation with tier ordering constraints.
+- JSON output mode for the recall CLI command.
+- Entity alias table validation detecting ambiguous aliases.
+- Plan-level budget cap with step budget aggregation and validation.
+- Persistent cooldown tracker for trigger scheduling across sessions.
   determinism suite covering the full offline pipeline.
 - Version consistency test across pyproject, package, and changelog.
 - BM25 index persistence (save/load) with stale-index detection and rebuild
