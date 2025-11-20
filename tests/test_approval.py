@@ -242,3 +242,67 @@ def test_approval_average_decision_time() -> None:
     queue.decide("r2", "denied", "admin", decided_at_s=300)
     avg = queue.average_decision_time()
     assert avg == 75.0
+
+
+def test_add_escalation_chain_validates_input() -> None:
+    import pytest
+
+    from famulix.approval import ApprovalQueue
+
+    queue = ApprovalQueue()
+    queue.add_escalation_chain("deploy", ["alice", "bob"])
+    assert queue.chain_depth("deploy") == 2
+
+    with pytest.raises(ValueError, match="non-empty"):
+        queue.add_escalation_chain("", ["alice"])
+    with pytest.raises(ValueError, match="at least one"):
+        queue.add_escalation_chain("deploy", [])
+    with pytest.raises(ValueError, match="non-empty strings"):
+        queue.add_escalation_chain("deploy", ["alice", ""])
+
+
+def test_validate_chains_reports_problems() -> None:
+    from famulix.approval import ApprovalQueue
+
+    queue = ApprovalQueue()
+    queue.escalation_chains[""] = ["alice"]
+    queue.escalation_chains["deploy"] = []
+    queue.escalation_chains["test"] = ["valid", ""]
+    problems = queue.validate_chains()
+    assert len(problems) == 3
+    assert any("empty action" in p for p in problems)
+    assert any("is empty" in p for p in problems)
+    assert any("invalid approver" in p for p in problems)
+
+
+def test_chain_depth_returns_zero_for_unknown() -> None:
+    from famulix.approval import ApprovalQueue
+
+    queue = ApprovalQueue()
+    assert queue.chain_depth("unknown") == 0
+    queue.add_escalation_chain("deploy", ["alice", "bob", "charlie"])
+    assert queue.chain_depth("deploy") == 3
+
+
+def test_escalate_uses_registered_chain() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    queue = ApprovalQueue()
+    queue.add_escalation_chain("deploy", ["manager", "director"])
+    req = ApprovalRequest(
+        request_id="r1",
+        requester="dev",
+        action="deploy",
+        resource="production",
+        status="pending",
+        created_at_s=1000,
+        expires_at_s=2000,
+    )
+    queue.submit(req)
+    assert queue.escalate("r1", 1500)
+    assert req.escalation_level == 1
+    assert req.approver == "manager"
+    assert queue.escalate("r1", 1600)
+    assert req.escalation_level == 2
+    assert req.approver == "director"
+    assert not queue.escalate("r1", 1700)  # end of chain

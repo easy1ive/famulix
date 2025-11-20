@@ -141,3 +141,37 @@ class ApprovalQueue:
             return 0.0
         total = sum(r.decided_at_s - r.created_at_s for r in decided)  # type: ignore[operator]
         return round(total / len(decided), 6)
+
+    def add_escalation_chain(self, action: str, approvers: list[str]) -> None:
+        """Register an escalation chain for an action type.
+
+        Approvers are tried in order when requests for this action are
+        escalated. Validates that the chain is non-empty and contains
+        non-empty strings.
+        """
+        if not action.strip():
+            raise ValueError("escalation chain action must be non-empty")
+        if not approvers:
+            raise ValueError("escalation chain must have at least one approver")
+        if any(not isinstance(a, str) or not a.strip() for a in approvers):
+            raise ValueError("escalation chain approvers must be non-empty strings")
+        self.escalation_chains[action] = list(approvers)
+
+    def validate_chains(self) -> list[str]:
+        """Validate all registered escalation chains and return any problems."""
+        problems: list[str] = []
+        for action, chain in self.escalation_chains.items():
+            if not action.strip():
+                problems.append("escalation chain has empty action key")
+            if not chain:
+                problems.append(f"escalation chain for {action!r} is empty")
+            for i, approver in enumerate(chain):
+                if not isinstance(approver, str) or not approver.strip():
+                    problems.append(
+                        f"escalation chain for {action!r} has invalid approver at index {i}"
+                    )
+        return problems
+
+    def chain_depth(self, action: str) -> int:
+        """Return the length of the escalation chain for an action."""
+        return len(self.escalation_chains.get(action, []))
