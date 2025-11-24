@@ -617,3 +617,52 @@ def test_estimate_briefing_tokens_counts_content() -> None:
     briefing = Briefing(title="Daily Briefing", date_str="2026-11-12", items=items, metadata={})
     tokens = estimate_briefing_tokens(briefing)
     assert tokens > 0
+
+
+def test_sort_items_by_section_respects_custom_order() -> None:
+    from famulix.briefing import BriefingItem, sort_items_by_section
+
+    items = [
+        BriefingItem(title="r1", body="", section="reminders"),
+        BriefingItem(title="a1", body="", section="agenda"),
+        BriefingItem(title="c1", body="", section="commitments"),
+        BriefingItem(title="m1", body="", section="recent_memories"),
+    ]
+    sorted_items = sort_items_by_section(
+        items, section_order=("agenda", "commitments", "reminders", "recent_memories")
+    )
+    sections = [item.section for item in sorted_items]
+    assert sections == ["agenda", "commitments", "reminders", "recent_memories"]
+
+
+def test_sort_items_by_section_preserves_intra_section_order() -> None:
+    from famulix.briefing import BriefingItem, sort_items_by_section
+
+    items = [
+        BriefingItem(title="a2", body="", section="agenda"),
+        BriefingItem(title="a1", body="", section="agenda"),
+        BriefingItem(title="r1", body="", section="reminders"),
+    ]
+    sorted_items = sort_items_by_section(items)
+    assert [item.title for item in sorted_items] == ["a2", "a1", "r1"]
+
+
+def test_sort_items_by_section_puts_unknown_sections_last() -> None:
+    from famulix.briefing import BriefingItem, sort_items_by_section
+
+    items = [
+        BriefingItem(title="x1", body="", section="custom"),
+        BriefingItem(title="a1", body="", section="agenda"),
+    ]
+    sorted_items = sort_items_by_section(items)
+    assert sorted_items[0].section == "agenda"
+    assert sorted_items[1].section == "custom"
+
+
+def test_sort_items_by_section_default_order() -> None:
+    from famulix.briefing import DEFAULT_SECTION_ORDER, BriefingItem, sort_items_by_section
+
+    assert DEFAULT_SECTION_ORDER == ("agenda", "commitments", "reminders", "recent_memories")
+    items = [BriefingItem(title="m", body="", section=s) for s in reversed(DEFAULT_SECTION_ORDER)]
+    sorted_items = sort_items_by_section(items)
+    assert [item.section for item in sorted_items] == list(DEFAULT_SECTION_ORDER)

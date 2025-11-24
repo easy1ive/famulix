@@ -79,6 +79,29 @@ class Briefing:
         return True
 
 
+DEFAULT_SECTION_ORDER: tuple[str, ...] = ("agenda", "commitments", "reminders", "recent_memories")
+
+
+def sort_items_by_section(
+    items: list[BriefingItem],
+    section_order: tuple[str, ...] = DEFAULT_SECTION_ORDER,
+) -> list[BriefingItem]:
+    """Reorder briefing items by section according to a custom order.
+
+    Items in sections not listed in section_order appear at the end in their
+    original relative order. Items within the same section retain their
+    original ordering.
+    """
+    order_map = {section: index for index, section in enumerate(section_order)}
+    max_order = len(section_order)
+
+    def sort_key(item: BriefingItem) -> tuple[int, int]:
+        section_rank = order_map.get(item.section, max_order)
+        return (section_rank, items.index(item))
+
+    return sorted(items, key=sort_key)
+
+
 def _build_index(graph: MemoryGraph) -> BM25Index:
     idx = BM25Index()
     for node in graph.all_nodes():
