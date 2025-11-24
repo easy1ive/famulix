@@ -427,3 +427,96 @@ class MemoryGraph:
                 seen_edges.add(edge.edge_id)
                 unique_edges.append(edge)
         return nodes, unique_edges
+
+    def check_invariants(self) -> list[str]:
+        """Validate graph invariants and return a list of violations.
+
+        Checks:
+        - No dangling edges (both endpoints must exist)
+        - Acyclic provenance (derived_from chains never loop)
+        - Single active version per fact key
+        """
+        violations: list[str] = []
+
+        for edge in self._edges.values():
+            if edge.from_id not in self._nodes:
+                violations.append(f"dangling edge {edge.edge_id}: source {edge.from_id} missing")
+            if edge.to_id not in self._nodes:
+                violations.append(f"dangling edge {edge.edge_id}: target {edge.to_id} missing")
+
+        if self.has_cycle_along("derived_from"):
+            violations.append("provenance cycle detected in derived_from edges")
+
+        fact_keys: dict[str, list[MemoryNode]] = {}
+        for node in self._nodes.values():
+            if node.kind == "fact" and node.is_active:
+                key = node.metadata.get("fact_key", "")
+                if key:
+                    fact_keys.setdefault(key, []).append(node)
+        for key, nodes in fact_keys.items():
+            if len(nodes) > 1:
+                violations.append(f"multiple active facts with key {key}: {len(nodes)} nodes")
+
+        return violations
+
+    def bulk_add(
+        self, nodes: list[MemoryNode], edges: list[MemoryEdge]
+    ) -> tuple[int, int, list[str]]:
+        """Add multiple nodes and edges, returning counts and any invariant violations.
+
+        Nodes and edges are added atomically: if invariants would be violated,
+        nothing is added and the violation list is returned.
+        """
+        temp = MemoryGraph()
+        for node in self._nodes.values():
+            temp.add_node(node)
+        for edge in self._edges.values():
+            temp.add_edge(edge)
+
+        added_nodes = 0
+        for node in nodes:
+            temp.add_node(node)
+            added_nodes += 1
+
+        added_edges = 0
+        errors: list[str] = []
+        for edge in edges:
+            try:
+                temp.add_edge(edge)
+                added_edges += 1
+            except ValueError as exc:
+                errors.append(str(exc))
+
+        if errors:
+            return 0, 0, errors
+
+        violations = temp.check_invariants()
+        if violations:
+            return 0, 0, violations
+
+        self._nodes = temp._nodes
+        self._edges = temp._edges
+        return added_nodes, added_edges, []
+
+    def merge_from(self, other: MemoryGraph) -> tuple[int, int]:
+        """Merge another graph into this one, returning (nodes_added, edges_added).
+
+        Nodes with the same ID are skipped. Edges referencing missing nodes are skipped.
+        """
+        added_nodes = 0
+        for node in other.all_nodes():
+            if not self.has_node(node.node_id):
+                self.add_node(node)
+                added_nodes += 1
+
+        added_edges = 0
+        for edge in other.all_edges():
+            if (
+                self.has_node(edge.from_id)
+                and self.has_node(edge.to_id)
+                and edge.edge_id not in self._edges
+            ):
+                self.add_edge(edge)
+                added_edges += 1
+
+        return added_nodes, added_edges
