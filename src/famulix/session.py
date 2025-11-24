@@ -131,6 +131,7 @@ class SessionRecorder:
         if not self.verify():
             raise ValueError("cannot checkpoint an invalid session")
         return {
+            "schema_version": 1,
             "session_id": self.session_id,
             "seed": self.seed,
             "next_seq": len(self.entries),
@@ -139,7 +140,7 @@ class SessionRecorder:
 
     @classmethod
     def resume_from(cls, checkpoint: dict[str, object], source: SessionRecorder) -> SessionRecorder:
-        required = {"session_id", "seed", "next_seq", "digest"}
+        required = {"schema_version", "session_id", "seed", "next_seq", "digest"}
         if (
             set(checkpoint) != required
             or checkpoint.get("session_id") != source.session_id
