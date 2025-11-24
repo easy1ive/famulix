@@ -574,3 +574,99 @@ def test_neighborhood_validates_radius() -> None:
     graph = MemoryGraph()
     with pytest.raises(ValueError, match="non-negative"):
         graph.neighborhood("x", radius=-1)
+
+
+def test_check_invariants_valid_graph() -> None:
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("entity", "alice", "person", created_at_s=100)
+    n2 = MemoryNode.create("episode", "meeting", "body", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+    e = MemoryEdge.create(n1.node_id, n2.node_id, "mentions")
+    graph.add_edge(e)
+    violations = graph.check_invariants()
+    assert violations == []
+
+
+def test_check_invariants_detects_dangling_edge() -> None:
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("entity", "alice", "person", created_at_s=100)
+    graph.add_node(n1)
+    edge = MemoryEdge.create(n1.node_id, "missing-node", "mentions")
+    graph._edges[edge.edge_id] = edge
+    violations = graph.check_invariants()
+    assert any("dangling" in v for v in violations)
+
+
+def test_check_invariants_detects_duplicate_facts() -> None:
+    graph = MemoryGraph()
+    n1 = MemoryNode.create(
+        "fact", "address", "old", metadata={"fact_key": "home"}, created_at_s=100
+    )
+    n2 = MemoryNode.create(
+        "fact", "address", "new", metadata={"fact_key": "home"}, created_at_s=200
+    )
+    graph.add_node(n1)
+    graph.add_node(n2)
+    violations = graph.check_invariants()
+    assert any("multiple active facts" in v for v in violations)
+
+
+def test_bulk_add_atomic_success() -> None:
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("entity", "alice", "person", created_at_s=100)
+    n2 = MemoryNode.create("entity", "bob", "person", created_at_s=200)
+    e = MemoryEdge.create(n1.node_id, n2.node_id, "mentions")
+    nodes_added, edges_added, violations = graph.bulk_add([n1, n2], [e])
+    assert nodes_added == 2
+    assert edges_added == 1
+    assert violations == []
+    assert graph.node_count() == 2
+    assert graph.edge_count() == 1
+
+
+def test_bulk_add_atomic_rollback_on_violation() -> None:
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("entity", "alice", "person", created_at_s=100)
+    graph.add_node(n1)
+    bad_edge = MemoryEdge.create(n1.node_id, "missing", "mentions")
+    nodes_added, edges_added, violations = graph.bulk_add([], [bad_edge])
+    assert nodes_added == 0
+    assert edges_added == 0
+    assert len(violations) > 0
+    assert graph.node_count() == 1
+    assert graph.edge_count() == 0
+
+
+def test_merge_from_combines_graphs() -> None:
+    g1 = MemoryGraph()
+    n1 = MemoryNode.create("entity", "alice", "person", created_at_s=100)
+    g1.add_node(n1)
+
+    g2 = MemoryGraph()
+    n2 = MemoryNode.create("entity", "bob", "person", created_at_s=200)
+    n3 = MemoryNode.create("entity", "charlie", "person", created_at_s=300)
+    e = MemoryEdge.create(n2.node_id, n3.node_id, "mentions")
+    g2.add_node(n2)
+    g2.add_node(n3)
+    g2.add_edge(e)
+
+    nodes_added, edges_added = g1.merge_from(g2)
+    assert nodes_added == 2
+    assert edges_added == 1
+    assert g1.node_count() == 3
+    assert g1.edge_count() == 1
+
+
+def test_merge_from_skips_duplicate_nodes() -> None:
+    g1 = MemoryGraph()
+    n1 = MemoryNode.create("entity", "alice", "person", created_at_s=100)
+    g1.add_node(n1)
+
+    g2 = MemoryGraph()
+    g2.add_node(n1)
+
+    nodes_added, edges_added = g1.merge_from(g2)
+    assert nodes_added == 0
+    assert edges_added == 0
+    assert g1.node_count() == 1
