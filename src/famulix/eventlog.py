@@ -6,7 +6,9 @@ retrieval index, preference store) are rebuilt from the log.
 
 from __future__ import annotations
 
+import json
 import sqlite3
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,7 +16,7 @@ from pathlib import Path
 from famulix.envelope import Envelope
 from famulix.events import Event
 
-LATEST_SCHEMA_VERSION = 2
+LATEST_SCHEMA_VERSION = 3
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS event_log (
@@ -29,7 +31,38 @@ CREATE INDEX IF NOT EXISTS idx_event_log_id ON event_log(event_id);
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
 );
+CREATE TABLE IF NOT EXISTS migration_log (
+    from_version INTEGER NOT NULL,
+    to_version INTEGER NOT NULL,
+    applied_at_s INTEGER NOT NULL
+);
 """
+
+
+def _migrate_v1_to_v2(cur: sqlite3.Cursor) -> None:
+    """Add source column and index (v1 → v2)."""
+    columns = {row[1] for row in cur.execute("PRAGMA table_info(event_log)")}
+    if "source" not in columns:
+        cur.execute("ALTER TABLE event_log ADD COLUMN source TEXT NOT NULL DEFAULT ''")
+        frames = cur.execute("SELECT seq, envelope_json FROM event_log").fetchall()
+        for seq, line in frames:
+            event = Event.from_envelope(Envelope.from_jsonl_line(line))
+            cur.execute("UPDATE event_log SET source = ? WHERE seq = ?", (event.source, seq))
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_event_log_source ON event_log(source)")
+
+
+def _migrate_v2_to_v3(cur: sqlite3.Cursor) -> None:
+    """Add metadata column for arbitrary key-value event annotations (v2 → v3)."""
+    columns = {row[1] for row in cur.execute("PRAGMA table_info(event_log)")}
+    if "metadata_json" not in columns:
+        cur.execute("ALTER TABLE event_log ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_event_log_inserted ON event_log(inserted_at_s)")
+
+
+MIGRATIONS: dict[tuple[int, int], object] = {
+    (1, 2): _migrate_v1_to_v2,
+    (2, 3): _migrate_v2_to_v3,
+}
 
 
 class EventLog:
@@ -55,16 +88,19 @@ class EventLog:
                 raise RuntimeError(
                     f"event log schema {version} is newer than supported {LATEST_SCHEMA_VERSION}"
                 )
-            columns = {row[1] for row in cur.execute("PRAGMA table_info(event_log)")}
-            if "source" not in columns:
-                cur.execute("ALTER TABLE event_log ADD COLUMN source TEXT NOT NULL DEFAULT ''")
-                frames = cur.execute("SELECT seq, envelope_json FROM event_log").fetchall()
-                for seq, line in frames:
-                    event = Event.from_envelope(Envelope.from_jsonl_line(line))
-                    cur.execute(
-                        "UPDATE event_log SET source = ? WHERE seq = ?", (event.source, seq)
-                    )
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_event_log_source ON event_log(source)")
+            while version < LATEST_SCHEMA_VERSION:
+                target = version + 1
+                key = (version, target)
+                migration = MIGRATIONS.get(key)
+                if migration is None:
+                    raise RuntimeError(f"no migration path from schema {version} to {target}")
+                migration(cur)
+                cur.execute(
+                    "INSERT INTO migration_log(from_version, to_version, applied_at_s)"
+                    " VALUES (?, ?, ?)",
+                    (version, target, int(time.time())),
+                )
+                version = target
             cur.execute("DELETE FROM schema_version")
             cur.execute("INSERT INTO schema_version(version) VALUES (?)", (LATEST_SCHEMA_VERSION,))
 
@@ -81,15 +117,19 @@ class EventLog:
         finally:
             cur.close()
 
-    def append(self, event: Event, inserted_at_s: int) -> int:
+    def append(
+        self, event: Event, inserted_at_s: int, metadata: dict[str, str] | None = None
+    ) -> int:
         """Append an event. Returns its sequence number."""
         env = event.to_envelope()
         line = env.to_jsonl_line()
+        meta_json = json.dumps(metadata or {}, sort_keys=True)
         with self._txn() as cur:
             cur.execute(
-                "INSERT INTO event_log(event_id, envelope_json, checksum, inserted_at_s, source)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (event.event_id, line, env.checksum, inserted_at_s, event.source),
+                "INSERT INTO event_log"
+                "(event_id, envelope_json, checksum, inserted_at_s, source, metadata_json)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (event.event_id, line, env.checksum, inserted_at_s, event.source, meta_json),
             )
             return cur.lastrowid or 0
 
@@ -149,6 +189,18 @@ class EventLog:
             other.append(evt, 0)
             n += 1
         return n
+
+    def schema_version(self) -> int:
+        """Return the current schema version."""
+        row = self._conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
+        return int(row[0] or 1)
+
+    def migration_history(self) -> list[dict[str, int]]:
+        """Return the migration log as a list of version transitions."""
+        rows = self._conn.execute(
+            "SELECT from_version, to_version, applied_at_s FROM migration_log ORDER BY applied_at_s"
+        ).fetchall()
+        return [{"from": r[0], "to": r[1], "applied_at_s": r[2]} for r in rows]
 
     def close(self) -> None:
         self._conn.close()

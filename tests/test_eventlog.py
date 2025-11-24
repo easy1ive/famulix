@@ -127,7 +127,7 @@ def test_v1_database_migrates_and_backfills_source(tmp_path: Path) -> None:
         ).fetchone()[0]
 
     assert source_row == ("legacy-chat",)
-    assert schema_version == 2
+    assert schema_version == 3
 
 
 def test_sources_returns_distinct_sorted() -> None:
@@ -218,3 +218,70 @@ def test_eventlog_sources_lists_distinct_sources() -> None:
     assert "calendar" in sources
     assert "notes" in sources
     assert len(sources) == 2
+
+
+def test_schema_version_returns_latest() -> None:
+    from famulix.eventlog import LATEST_SCHEMA_VERSION, EventLog
+
+    with EventLog() as log:
+        assert log.schema_version() == LATEST_SCHEMA_VERSION
+
+
+def test_migration_history_records_transitions(tmp_path: Path) -> None:
+    """A fresh v1 database migrating to v3 should log both transitions."""
+    db_path = tmp_path / "test.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE event_log (seq INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " event_id TEXT NOT NULL UNIQUE, envelope_json TEXT NOT NULL,"
+        " checksum TEXT NOT NULL, inserted_at_s INTEGER NOT NULL)"
+    )
+    conn.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
+    conn.execute("INSERT INTO schema_version(version) VALUES (1)")
+    conn.commit()
+    conn.close()
+
+    with EventLog(db_path) as log:
+        history = log.migration_history()
+        assert len(history) == 2
+        assert history[0]["from"] == 1
+        assert history[0]["to"] == 2
+        assert history[1]["from"] == 2
+        assert history[1]["to"] == 3
+        assert log.schema_version() == 3
+
+
+def test_future_schema_version_rejected(tmp_path: Path) -> None:
+    """Opening a database with a future schema version must raise."""
+    db_path = tmp_path / "future.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE event_log (seq INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " event_id TEXT NOT NULL UNIQUE, envelope_json TEXT NOT NULL,"
+        " checksum TEXT NOT NULL, inserted_at_s INTEGER NOT NULL, source TEXT)"
+    )
+    conn.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
+    conn.execute("INSERT INTO schema_version(version) VALUES (99)")
+    conn.commit()
+    conn.close()
+
+    with pytest.raises(RuntimeError, match="newer than supported"):
+        EventLog(db_path)
+
+
+def test_append_with_metadata() -> None:
+    """Events can be appended with arbitrary metadata annotations."""
+    with EventLog() as log:
+        evt = note_event(100, "s", "annotated")
+        seq = log.append(evt, inserted_at_s=100, metadata={"tag": "important"})
+        assert seq == 1
+        retrieved = log.get_by_seq(1)
+        assert retrieved == evt
+
+
+def test_metadata_default_empty() -> None:
+    """Events appended without metadata should use empty dict."""
+    with EventLog() as log:
+        evt = note_event(100, "s", "plain")
+        log.append(evt, inserted_at_s=100)
+        assert log.count() == 1
