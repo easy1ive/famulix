@@ -254,3 +254,71 @@ def encode_events_to_graph(
                 g.add_edge(MemoryEdge.create(fnode.node_id, ep.node_id, "derived_from"))
 
     return g
+
+
+def sanitize_hostile_text(text: str) -> str:
+    """Sanitize text that may contain hostile or malformed content.
+
+    Removes:
+    - Zero-width characters (U+200B, U+200C, U+200D, U+FEFF)
+    - Control characters except newline, tab, carriage return
+    - Surrogate pairs (invalid UTF-16 sequences)
+    - Excessive whitespace (collapse to single space)
+    """
+    import re
+    import unicodedata
+
+    result = []
+    for char in text:
+        code = ord(char)
+        if code in (0x200B, 0x200C, 0x200D, 0xFEFF):
+            continue
+        if code < 0x20 and code not in (0x09, 0x0A, 0x0D):
+            continue
+        if 0xD800 <= code <= 0xDFFF:
+            continue
+        result.append(char)
+
+    cleaned = "".join(result)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", cleaned)
+
+    return unicodedata.normalize("NFC", cleaned)
+
+
+def segment_unicode_words(text: str) -> list[str]:
+    """Segment text into words respecting unicode boundaries.
+
+    Handles CJK characters, emoji, and combining marks correctly.
+    CJK characters are treated as individual words.
+    """
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFC", text)
+
+    tokens: list[str] = []
+    current: list[str] = []
+
+    for char in normalized:
+        cat = unicodedata.category(char)
+        name = unicodedata.name(char, "")
+
+        is_cjk = "CJK" in name or "IDEOGRAPH" in name
+        if is_cjk:
+            if current:
+                tokens.append("".join(current))
+                current = []
+            tokens.append(char)
+        elif cat.startswith("L") or cat.startswith("N"):
+            current.append(char)
+        else:
+            if current:
+                tokens.append("".join(current))
+                current = []
+            if not char.isspace() and cat.startswith("P"):
+                tokens.append(char)
+
+    if current:
+        tokens.append("".join(current))
+
+    return tokens

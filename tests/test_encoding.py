@@ -316,3 +316,79 @@ def test_validate_alias_table_is_case_insensitive() -> None:
         }
     )
     assert len(problems) == 1
+
+
+def test_sanitize_hostile_text_removes_zero_width() -> None:
+    from famulix.encoding import sanitize_hostile_text
+
+    text = "hello​world‌test"
+    result = sanitize_hostile_text(text)
+    assert result == "helloworldtest"
+
+
+def test_sanitize_hostile_text_removes_control_chars() -> None:
+    from famulix.encoding import sanitize_hostile_text
+
+    text = "hello\x00\x01\x02world"
+    result = sanitize_hostile_text(text)
+    assert result == "helloworld"
+
+
+def test_sanitize_hostile_text_preserves_newlines_and_tabs() -> None:
+    from famulix.encoding import sanitize_hostile_text
+
+    text = "line1\nline2\tindented"
+    result = sanitize_hostile_text(text)
+    assert "\n" in result
+    assert "\t" in result or " " in result
+
+
+def test_sanitize_hostile_text_collapses_whitespace() -> None:
+    from famulix.encoding import sanitize_hostile_text
+
+    text = "hello    world   test"
+    result = sanitize_hostile_text(text)
+    assert result == "hello world test"
+
+
+def test_sanitize_hostile_text_unicode_normalization() -> None:
+    from famulix.encoding import sanitize_hostile_text
+
+    text = "café"  # with combining accent
+    result = sanitize_hostile_text(text)
+    assert "caf" in result
+
+
+def test_segment_unicode_words_basic() -> None:
+    from famulix.encoding import segment_unicode_words
+
+    words = segment_unicode_words("hello world")
+    assert words == ["hello", "world"]
+
+
+def test_segment_unicode_words_cjk() -> None:
+    from famulix.encoding import segment_unicode_words
+
+    words = segment_unicode_words("你好世界")
+    assert len(words) == 4
+    assert "你" in words
+    assert "好" in words
+
+
+def test_segment_unicode_words_punctuation() -> None:
+    from famulix.encoding import segment_unicode_words
+
+    words = segment_unicode_words("hello, world!")
+    assert "hello" in words
+    assert "world" in words
+    assert "," in words
+    assert "!" in words
+
+
+def test_segment_unicode_words_numbers() -> None:
+    from famulix.encoding import segment_unicode_words
+
+    words = segment_unicode_words("test 123 value")
+    assert "test" in words
+    assert "123" in words
+    assert "value" in words
