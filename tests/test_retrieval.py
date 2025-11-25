@@ -548,3 +548,78 @@ def test_query_with_filters_applies_negation() -> None:
         now_s=3000,
     )
     assert all(r.node_id != n2.node_id for r in results)
+
+
+def test_bm25_digest_deterministic() -> None:
+    from famulix.retrieval import BM25Index
+
+    idx1 = BM25Index()
+    idx1.add("n1", "hello world")
+    idx1.add("n2", "foo bar")
+
+    idx2 = BM25Index()
+    idx2.add("n2", "foo bar")
+    idx2.add("n1", "hello world")
+
+    assert idx1.digest() == idx2.digest()
+
+
+def test_bm25_digest_changes_with_content() -> None:
+    from famulix.retrieval import BM25Index
+
+    idx1 = BM25Index()
+    idx1.add("n1", "hello world")
+    d1 = idx1.digest()
+
+    idx1.add("n2", "new document")
+    d2 = idx1.digest()
+
+    assert d1 != d2
+
+
+def test_bm25_needs_rebuild_detects_missing_nodes() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.retrieval import BM25Index
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "test", "body", created_at_s=100)
+    n2 = MemoryNode.create("fact", "test2", "body2", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+
+    index = BM25Index()
+    index.add_node(n1)
+
+    assert index.needs_rebuild(graph) is True
+
+
+def test_bm25_needs_rebuild_false_when_synced() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.retrieval import BM25Index
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "test", "body", created_at_s=100)
+    n2 = MemoryNode.create("fact", "test2", "body2", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+
+    index = BM25Index()
+    index.add_node(n1)
+    index.add_node(n2)
+
+    assert index.needs_rebuild(graph) is False
+
+
+def test_bm25_needs_rebuild_detects_stale_nodes() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.retrieval import BM25Index
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "test", "body", created_at_s=100)
+    graph.add_node(n1)
+
+    index = BM25Index()
+    index.add_node(n1)
+    index.add("deleted-node", "old content")
+
+    assert index.needs_rebuild(graph) is True

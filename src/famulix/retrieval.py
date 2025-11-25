@@ -184,6 +184,34 @@ class BM25Index:
             self.remove(nid)
         return len(stale)
 
+    def digest(self) -> str:
+        """Return a deterministic hash of the index contents.
+
+        Useful for detecting when an index is stale relative to its source.
+        """
+        import hashlib
+        import json
+
+        payload = {
+            "docs": sorted(self.docs.keys()),
+            "df": {k: v for k, v in sorted(self.df.items())},
+            "avgdl": round(self.avgdl, 6),
+            "k1": self.k1,
+            "b": self.b,
+        }
+        text = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+    def needs_rebuild(self, graph: MemoryGraph) -> bool:
+        """Check if the index is out of sync with the graph.
+
+        Returns True if any active nodes are missing from the index or
+        if the index contains stale (deleted) nodes.
+        """
+        active_ids = {n.node_id for n in graph.active_nodes()}
+        indexed_ids = set(self.docs.keys())
+        return active_ids != indexed_ids
+
 
 @dataclass(frozen=True)
 class FusionConfig:
