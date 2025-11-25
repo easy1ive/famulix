@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -22,6 +22,7 @@ class ContextItem:
     token_estimate: int
     value: float  # salience / relevance score
     payload: str  # the text snippet
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -226,3 +227,62 @@ def trim_to_budget(items: Sequence[ContextItem], budget: int) -> list[ContextIte
         dropped.add(index)
         total -= kept[index].token_estimate
     return [item for i, item in enumerate(kept) if i not in dropped]
+
+
+def order_context_items(
+    items: list[ContextItem],
+    *,
+    strategy: str = "value_desc",
+) -> list[ContextItem]:
+    """Order context items by a specified strategy.
+
+    Strategies:
+    - "value_desc": highest value first (default)
+    - "value_asc": lowest value first
+    - "recency_desc": most recent first (by created_at_s in metadata)
+    - "recency_asc": oldest first
+    - "id_asc": alphabetical by item_id
+    - "original": preserve input order
+    """
+    if strategy == "original":
+        return list(items)
+    elif strategy == "value_desc":
+        return sorted(items, key=lambda x: (-x.value, x.item_id))
+    elif strategy == "value_asc":
+        return sorted(items, key=lambda x: (x.value, x.item_id))
+    elif strategy == "recency_desc":
+        return sorted(
+            items,
+            key=lambda x: (
+                -int(x.metadata.get("created_at_s", "0")),
+                x.item_id,
+            ),
+        )
+    elif strategy == "recency_asc":
+        return sorted(
+            items,
+            key=lambda x: (
+                int(x.metadata.get("created_at_s", "0")),
+                x.item_id,
+            ),
+        )
+    elif strategy == "id_asc":
+        return sorted(items, key=lambda x: x.item_id)
+    else:
+        raise ValueError(f"unknown ordering strategy: {strategy}")
+
+
+def assemble_ordered_context(
+    items: list[ContextItem],
+    budget: int,
+    *,
+    order_strategy: str = "value_desc",
+) -> list[ContextItem]:
+    """Assemble context with explicit ordering before budget trimming.
+
+    Items are first ordered by the strategy, then trimmed to fit the budget
+    using the conservative drop-lowest approach. This ensures the ordering
+    preference is respected in the final output.
+    """
+    ordered = order_context_items(items, strategy=order_strategy)
+    return trim_to_budget(ordered, budget)

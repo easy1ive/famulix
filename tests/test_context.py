@@ -310,3 +310,125 @@ def test_trim_to_budget_drops_lowest_value_first() -> None:
     assert "low" not in kept_ids
     assert "high" in kept_ids
     assert sum(item.token_estimate for item in kept) <= 40
+
+
+def test_order_context_items_value_desc() -> None:
+    from famulix.context import ContextItem, order_context_items
+
+    items = [
+        ContextItem(item_id="low", token_estimate=10, value=0.1, payload="low"),
+        ContextItem(item_id="high", token_estimate=10, value=0.9, payload="high"),
+        ContextItem(item_id="mid", token_estimate=10, value=0.5, payload="mid"),
+    ]
+    ordered = order_context_items(items, strategy="value_desc")
+    assert ordered[0].item_id == "high"
+    assert ordered[1].item_id == "mid"
+    assert ordered[2].item_id == "low"
+
+
+def test_order_context_items_value_asc() -> None:
+    from famulix.context import ContextItem, order_context_items
+
+    items = [
+        ContextItem(item_id="high", token_estimate=10, value=0.9, payload="high"),
+        ContextItem(item_id="low", token_estimate=10, value=0.1, payload="low"),
+    ]
+    ordered = order_context_items(items, strategy="value_asc")
+    assert ordered[0].item_id == "low"
+    assert ordered[1].item_id == "high"
+
+
+def test_order_context_items_recency_desc() -> None:
+    from famulix.context import ContextItem, order_context_items
+
+    items = [
+        ContextItem(
+            item_id="old",
+            token_estimate=10,
+            value=0.5,
+            payload="old",
+            metadata={"created_at_s": "100"},
+        ),
+        ContextItem(
+            item_id="new",
+            token_estimate=10,
+            value=0.5,
+            payload="new",
+            metadata={"created_at_s": "200"},
+        ),
+    ]
+    ordered = order_context_items(items, strategy="recency_desc")
+    assert ordered[0].item_id == "new"
+    assert ordered[1].item_id == "old"
+
+
+def test_order_context_items_recency_asc() -> None:
+    from famulix.context import ContextItem, order_context_items
+
+    items = [
+        ContextItem(
+            item_id="new",
+            token_estimate=10,
+            value=0.5,
+            payload="new",
+            metadata={"created_at_s": "200"},
+        ),
+        ContextItem(
+            item_id="old",
+            token_estimate=10,
+            value=0.5,
+            payload="old",
+            metadata={"created_at_s": "100"},
+        ),
+    ]
+    ordered = order_context_items(items, strategy="recency_asc")
+    assert ordered[0].item_id == "old"
+    assert ordered[1].item_id == "new"
+
+
+def test_order_context_items_id_asc() -> None:
+    from famulix.context import ContextItem, order_context_items
+
+    items = [
+        ContextItem(item_id="c", token_estimate=10, value=0.5, payload="c"),
+        ContextItem(item_id="a", token_estimate=10, value=0.5, payload="a"),
+        ContextItem(item_id="b", token_estimate=10, value=0.5, payload="b"),
+    ]
+    ordered = order_context_items(items, strategy="id_asc")
+    assert ordered[0].item_id == "a"
+    assert ordered[1].item_id == "b"
+    assert ordered[2].item_id == "c"
+
+
+def test_order_context_items_original() -> None:
+    from famulix.context import ContextItem, order_context_items
+
+    items = [
+        ContextItem(item_id="first", token_estimate=10, value=0.1, payload="first"),
+        ContextItem(item_id="second", token_estimate=10, value=0.9, payload="second"),
+    ]
+    ordered = order_context_items(items, strategy="original")
+    assert ordered[0].item_id == "first"
+    assert ordered[1].item_id == "second"
+
+
+def test_order_context_items_invalid_strategy() -> None:
+    from famulix.context import ContextItem, order_context_items
+
+    items = [ContextItem(item_id="a", token_estimate=10, value=0.5, payload="a")]
+    with pytest.raises(ValueError, match="unknown ordering strategy"):
+        order_context_items(items, strategy="invalid")
+
+
+def test_assemble_ordered_context_respects_order() -> None:
+    from famulix.context import ContextItem, assemble_ordered_context
+
+    items = [
+        ContextItem(item_id="low", token_estimate=20, value=0.1, payload="low"),
+        ContextItem(item_id="high", token_estimate=20, value=0.9, payload="high"),
+        ContextItem(item_id="mid", token_estimate=20, value=0.5, payload="mid"),
+    ]
+    result = assemble_ordered_context(items, budget=40, order_strategy="value_desc")
+    assert len(result) == 2
+    assert sum(item.token_estimate for item in result) <= 40
+    assert result[0].item_id == "high"
