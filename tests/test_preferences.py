@@ -322,3 +322,53 @@ def test_preference_profile_contradictory_signals_decay_over_time() -> None:
     prefs_late = profile.current_preferences(now_s=86400 * 60, min_confidence=0.0)
     assert "format" in prefs_early
     assert "format" in prefs_late
+
+
+def test_calibration_report_structure() -> None:
+    from famulix.preferences import calibration_report
+
+    predictions = [0.1, 0.2, 0.8, 0.9]
+    outcomes = [0, 0, 1, 1]
+    report = calibration_report(predictions, outcomes, n_bins=5)
+
+    assert "brier_score" in report
+    assert "ece" in report
+    assert "bins" in report
+    assert "n_samples" in report
+    assert "positive_rate" in report
+    assert "mean_prediction" in report
+    assert report["n_samples"] == 4
+    assert len(report["bins"]) == 5
+
+
+def test_calibration_report_perfect_calibration() -> None:
+    from famulix.preferences import calibration_report
+
+    predictions = [0.1, 0.1, 0.5, 0.5, 0.9, 0.9]
+    outcomes = [0, 0, 1, 0, 1, 1]
+    report = calibration_report(predictions, outcomes, n_bins=3)
+
+    assert report["brier_score"] < 0.2
+    assert report["ece"] < 0.3
+
+
+def test_calibration_report_extreme_miscalibration() -> None:
+    from famulix.preferences import calibration_report
+
+    predictions = [0.9, 0.9, 0.1, 0.1]
+    outcomes = [0, 0, 1, 1]
+    report = calibration_report(predictions, outcomes, n_bins=2)
+
+    assert report["ece"] > 0.5
+    assert report["brier_score"] > 0.5
+
+
+def test_calibration_report_statistics() -> None:
+    from famulix.preferences import calibration_report
+
+    predictions = [0.2, 0.4, 0.6, 0.8]
+    outcomes = [0, 0, 1, 1]
+    report = calibration_report(predictions, outcomes, n_bins=4)
+
+    assert report["positive_rate"] == 0.5
+    assert 0.4 <= report["mean_prediction"] <= 0.6

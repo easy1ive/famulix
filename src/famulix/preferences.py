@@ -221,3 +221,36 @@ def calibration_error(
         return 0.0
     ece = sum(b["count"] * abs(b["avg_predicted"] - b["avg_observed"]) for b in bins) / total
     return round(ece, 6)
+
+
+def calibration_report(
+    predictions: list[float],
+    outcomes: list[int],
+    n_bins: int = 10,
+) -> dict[str, object]:
+    """Generate a comprehensive calibration report.
+
+    Returns:
+        A dict with:
+        - brier_score: overall Brier score
+        - ece: expected calibration error
+        - bins: list of reliability bins with details
+        - n_samples: total number of samples
+        - positive_rate: fraction of positive outcomes
+        - mean_prediction: average predicted probability
+    """
+    brier = brier_score(predictions, outcomes)
+    ece = calibration_error(predictions, outcomes, n_bins)
+    bins = reliability_bins(predictions, outcomes, n_bins)
+
+    outcomes_arr = np.array(outcomes, dtype=np.float64)
+    predictions_arr = np.array(predictions, dtype=np.float64)
+
+    return {
+        "brier_score": brier,
+        "ece": ece,
+        "bins": bins,
+        "n_samples": len(predictions),
+        "positive_rate": round(float(outcomes_arr.mean()), 6),
+        "mean_prediction": round(float(predictions_arr.mean()), 6),
+    }
