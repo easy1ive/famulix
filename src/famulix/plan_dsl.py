@@ -344,3 +344,60 @@ def plan_diff(a: Plan, b: Plan) -> dict[str, list[str]]:
         if sa is not None and sb is not None and sa.to_dict() != sb.to_dict():
             modified.append(sid)
     return {"added": sorted(added), "removed": sorted(removed), "modified": sorted(modified)}
+
+
+def check_budget_escalation(plan: Plan, max_budget_multiplier: float = 2.0) -> list[str]:
+    """Check if any step's budget is disproportionately large.
+
+    Returns warnings for steps whose budget exceeds max_budget_multiplier times
+    the average step budget.
+    """
+    warnings: list[str] = []
+    if not plan.steps:
+        return warnings
+
+    plan_budget = plan.total_step_budget()
+    if plan_budget == 0:
+        return warnings
+
+    avg_budget = plan_budget / len(plan.steps)
+
+    for step in plan.steps:
+        if step.budget > avg_budget * max_budget_multiplier:
+            warnings.append(
+                f"step {step.id} has budget {step.budget} which exceeds "
+                f"{max_budget_multiplier}x the average step budget {avg_budget:.2f}"
+            )
+
+    return warnings
+
+
+def validate_step_type_compatibility(plan: Plan) -> list[str]:
+    """Validate that step input/output types are compatible across dependencies.
+
+    Returns a list of type mismatch errors.
+    """
+    errors: list[str] = []
+    steps_by_id = {s.id: s for s in plan.steps}
+
+    for step in plan.steps:
+        for dep_id in step.depends_on:
+            dep_step = steps_by_id.get(dep_id)
+            if dep_step is None:
+                continue
+
+            if step.input_types and dep_step.output_types:
+                for input_name, input_type in step.input_types.items():
+                    if input_name in dep_step.output_types:
+                        output_type = dep_step.output_types[input_name]
+                        if (
+                            input_type != output_type
+                            and input_type != "any"
+                            and output_type != "any"
+                        ):
+                            errors.append(
+                                f"step {step.id} input '{input_name}' expects {input_type} "
+                                f"but dependency {dep_id} outputs {output_type}"
+                            )
+
+    return errors
