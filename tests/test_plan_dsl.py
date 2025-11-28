@@ -482,3 +482,102 @@ def test_plan_budget_zero_means_no_cap() -> None:
     )
     result = validate_plan(plan)
     assert result.valid
+
+
+def test_check_budget_escalation_no_warnings() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, check_budget_escalation
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(id="s1", tool="t1", budget=10.0),
+            PlanStep(id="s2", tool="t2", budget=15.0),
+        ],
+    )
+    warnings = check_budget_escalation(plan, max_budget_multiplier=2.0)
+    assert warnings == []
+
+
+def test_check_budget_escalation_detects_excessive() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, check_budget_escalation
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(id="s1", tool="t1", budget=10.0),
+            PlanStep(id="s2", tool="t2", budget=1000.0),
+        ],
+    )
+    warnings = check_budget_escalation(plan, max_budget_multiplier=1.5)
+    assert len(warnings) == 1
+    assert "s2" in warnings[0]
+
+
+def test_validate_step_type_compatibility_no_errors() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_step_type_compatibility
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(
+                id="s1",
+                tool="t1",
+                output_types={"result": "string"},
+            ),
+            PlanStep(
+                id="s2",
+                tool="t2",
+                depends_on=["s1"],
+                input_types={"result": "string"},
+            ),
+        ],
+    )
+    errors = validate_step_type_compatibility(plan)
+    assert errors == []
+
+
+def test_validate_step_type_compatibility_detects_mismatch() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_step_type_compatibility
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(
+                id="s1",
+                tool="t1",
+                output_types={"data": "number"},
+            ),
+            PlanStep(
+                id="s2",
+                tool="t2",
+                depends_on=["s1"],
+                input_types={"data": "string"},
+            ),
+        ],
+    )
+    errors = validate_step_type_compatibility(plan)
+    assert len(errors) == 1
+    assert "type mismatch" in errors[0].lower() or "expects" in errors[0].lower()
+
+
+def test_validate_step_type_compatibility_ignores_any_type() -> None:
+    from famulix.plan_dsl import Plan, PlanStep, validate_step_type_compatibility
+
+    plan = Plan(
+        plan_id="p1",
+        steps=[
+            PlanStep(
+                id="s1",
+                tool="t1",
+                output_types={"data": "any"},
+            ),
+            PlanStep(
+                id="s2",
+                tool="t2",
+                depends_on=["s1"],
+                input_types={"data": "string"},
+            ),
+        ],
+    )
+    errors = validate_step_type_compatibility(plan)
+    assert errors == []
