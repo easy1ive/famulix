@@ -248,3 +248,63 @@ def generate_triggers(
     # Sort by trigger time
     triggers.sort(key=lambda t: t.trigger_time_s)
     return triggers
+
+
+def trigger_statistics(log: TriggerLog) -> dict[str, object]:
+    """Generate statistics from a trigger log.
+
+    Returns a dict with:
+    - total_triggers: total number of trigger events
+    - by_action: breakdown by action type
+    - unique_memories: number of unique memory ids referenced
+    - time_span_s: time span from first to last event (or 0 if < 2 events)
+    """
+    if log.entry_count() == 0:
+        return {
+            "total_triggers": 0,
+            "by_action": {},
+            "unique_memories": 0,
+            "time_span_s": 0,
+        }
+
+    entries = log.entries
+    by_action = log.action_summary()
+    unique_memories = len({e["memory_id"] for e in entries})
+
+    timestamps = [e["timestamp_s"] for e in entries]
+    time_span = max(timestamps) - min(timestamps) if len(timestamps) >= 2 else 0
+
+    return {
+        "total_triggers": log.entry_count(),
+        "by_action": by_action,
+        "unique_memories": unique_memories,
+        "time_span_s": time_span,
+    }
+
+
+def validate_trigger_config(config: TriggerConfig) -> list[str]:
+    """Validate a trigger configuration and return any problems.
+
+    Checks:
+    - Quiet hours are valid hours
+    - Cooldown is non-negative
+    - Dedupe window is non-negative
+    - Salience threshold is in [0, 1]
+    """
+    problems: list[str] = []
+
+    if config.quiet_hours_start < 0 or config.quiet_hours_start >= 24:
+        problems.append(f"quiet_hours_start must be in [0, 24), got {config.quiet_hours_start}")
+    if config.quiet_hours_end < 0 or config.quiet_hours_end >= 24:
+        problems.append(f"quiet_hours_end must be in [0, 24), got {config.quiet_hours_end}")
+
+    if config.cooldown_seconds < 0:
+        problems.append(f"cooldown_seconds must be non-negative, got {config.cooldown_seconds}")
+    if config.dedupe_window_seconds < 0:
+        problems.append(
+            f"dedupe_window_seconds must be non-negative, got {config.dedupe_window_seconds}"
+        )
+    if not 0.0 <= config.salience_threshold <= 1.0:
+        problems.append(f"salience_threshold must be in [0, 1], got {config.salience_threshold}")
+
+    return problems

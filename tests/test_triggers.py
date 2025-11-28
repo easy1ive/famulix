@@ -254,3 +254,94 @@ def test_cooldown_tracker_from_dict_validates_types() -> None:
 
     with pytest.raises(ValueError, match="strings to integers"):
         CooldownTracker.from_dict({"mem": "not_an_int"})
+
+
+def test_trigger_statistics_empty_log() -> None:
+    from famulix.triggers import TriggerLog, trigger_statistics
+
+    log = TriggerLog()
+    stats = trigger_statistics(log)
+    assert stats["total_triggers"] == 0
+    assert stats["by_action"] == {}
+    assert stats["unique_memories"] == 0
+    assert stats["time_span_s"] == 0
+
+
+def test_trigger_statistics_with_entries() -> None:
+    from famulix.triggers import TriggerLog, trigger_statistics
+
+    log = TriggerLog()
+    log.record(
+        timestamp_s=100,
+        trigger_id="t1",
+        memory_id="mem_a",
+        action="generated",
+        reason="salience=0.8",
+    )
+    log.record(
+        timestamp_s=200,
+        trigger_id="t2",
+        memory_id="mem_b",
+        action="generated",
+        reason="salience=0.6",
+    )
+    log.record(
+        timestamp_s=300,
+        trigger_id="t3",
+        memory_id="mem_a",
+        action="suppressed",
+        reason="cooldown",
+    )
+
+    stats = trigger_statistics(log)
+    assert stats["total_triggers"] == 3
+    assert stats["unique_memories"] == 2
+    assert stats["time_span_s"] == 200
+    assert stats["by_action"]["generated"] == 2
+    assert stats["by_action"]["suppressed"] == 1
+
+
+def test_validate_trigger_config_valid() -> None:
+    from famulix.triggers import TriggerConfig, validate_trigger_config
+
+    config = TriggerConfig(
+        quiet_hours_start=22,
+        quiet_hours_end=7,
+        cooldown_seconds=3600,
+        dedupe_window_seconds=300,
+        salience_threshold=0.5,
+    )
+    problems = validate_trigger_config(config)
+    assert problems == []
+
+
+def test_validate_trigger_config_invalid_hours() -> None:
+    from famulix.triggers import TriggerConfig, validate_trigger_config
+
+    config = TriggerConfig(
+        quiet_hours_start=25,
+        quiet_hours_end=-1,
+        cooldown_seconds=3600,
+        dedupe_window_seconds=300,
+        salience_threshold=0.5,
+    )
+    problems = validate_trigger_config(config)
+    assert len(problems) == 2
+    assert any("quiet" in p for p in problems)
+
+
+def test_validate_trigger_config_invalid_thresholds() -> None:
+    from famulix.triggers import TriggerConfig, validate_trigger_config
+
+    config = TriggerConfig(
+        quiet_hours_start=22,
+        quiet_hours_end=7,
+        cooldown_seconds=-100,
+        dedupe_window_seconds=-50,
+        salience_threshold=1.5,
+    )
+    problems = validate_trigger_config(config)
+    assert len(problems) == 3
+    assert any("cooldown" in p for p in problems)
+    assert any("dedupe" in p for p in problems)
+    assert any("salience" in p for p in problems)
