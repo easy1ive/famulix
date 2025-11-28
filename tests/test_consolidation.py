@@ -528,3 +528,60 @@ def test_consolidation_report_markdown_is_deterministic() -> None:
     second = report.to_markdown()
     assert first == second
     assert "No changes were made" not in first
+
+
+def test_validate_consolidation_report_valid() -> None:
+    from famulix.consolidation import ConsolidationReport, validate_consolidation_report
+
+    report = ConsolidationReport(
+        merged_pairs=[("mem_a", "mem_b")],
+        superseded=["mem_c"],
+        summary_nodes=["mem_summary"],
+    )
+    problems = validate_consolidation_report(report)
+    assert problems == []
+
+
+def test_validate_consolidation_report_empty() -> None:
+    from famulix.consolidation import ConsolidationReport, validate_consolidation_report
+
+    report = ConsolidationReport()
+    problems = validate_consolidation_report(report)
+    assert problems == []
+
+
+def test_validate_consolidation_report_detects_invalid_pairs() -> None:
+    from famulix.consolidation import ConsolidationReport, validate_consolidation_report
+
+    report = ConsolidationReport(
+        merged_pairs=[("mem_a", "mem_b"), ("invalid",)],
+        superseded=["", 123],
+    )
+    problems = validate_consolidation_report(report)
+    assert len(problems) >= 2
+
+
+def test_consolidation_statistics() -> None:
+    from famulix.consolidation import ConsolidationReport, consolidation_statistics
+
+    report = ConsolidationReport(
+        merged_pairs=[("mem_a", "mem_b"), ("mem_c", "mem_d")],
+        superseded=["mem_e"],
+        summary_nodes=["mem_s1", "mem_s2", "mem_s3"],
+    )
+    stats = consolidation_statistics(report)
+    assert stats["merged_pairs"] == 2
+    assert stats["superseded"] == 1
+    assert stats["summary_nodes"] == 3
+    assert stats["total_changes"] == 6
+
+
+def test_consolidation_statistics_empty() -> None:
+    from famulix.consolidation import ConsolidationReport, consolidation_statistics
+
+    report = ConsolidationReport()
+    stats = consolidation_statistics(report)
+    assert stats["merged_pairs"] == 0
+    assert stats["superseded"] == 0
+    assert stats["summary_nodes"] == 0
+    assert stats["total_changes"] == 0

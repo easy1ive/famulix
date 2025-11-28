@@ -399,3 +399,51 @@ def consolidate_with_summaries(
             if summary is not None:
                 report.summary_nodes.append(summary.node_id)
     return report
+
+
+def validate_consolidation_report(report: ConsolidationReport) -> list[str]:
+    """Validate a consolidation report for consistency.
+
+    Checks:
+    - All merged pairs have valid node references
+    - All superseded nodes are non-empty strings
+    - Summary nodes are non-empty strings
+    - Total changes is consistent with merge/supersede/summary counts
+    """
+    problems: list[str] = []
+
+    for i, pair in enumerate(report.merged_pairs):
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            problems.append(f"merged_pairs[{i}] is not a 2-element pair")
+        elif not all(isinstance(node_id, str) for node_id in pair):
+            problems.append(f"merged_pairs[{i}] contains non-string node ids")
+
+    for i, superseded in enumerate(report.superseded):
+        if not isinstance(superseded, str) or not superseded.strip():
+            problems.append(f"superseded[{i}] is not a non-empty string")
+
+    for i, summary in enumerate(report.summary_nodes):
+        if not isinstance(summary, str) or not summary.strip():
+            problems.append(f"summary_nodes[{i}] is not a non-empty string")
+
+    expected_total = len(report.merged_pairs) + len(report.superseded) + len(report.summary_nodes)
+    if report.total_changes() != expected_total:
+        problems.append(
+            f"total_changes ({report.total_changes()}) does not match "
+            f"merge+supersede+summary count ({expected_total})"
+        )
+
+    return problems
+
+
+def consolidation_statistics(report: ConsolidationReport) -> dict[str, int]:
+    """Generate statistics from a consolidation report.
+
+    Returns a dict with counts of each type of change.
+    """
+    return {
+        "merged_pairs": len(report.merged_pairs),
+        "superseded": len(report.superseded),
+        "summary_nodes": len(report.summary_nodes),
+        "total_changes": report.total_changes(),
+    }
