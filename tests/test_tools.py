@@ -616,3 +616,65 @@ def test_tool_validate_arguments_accepts_valid_input() -> None:
     )
     errors = spec.validate_arguments({"name": "Alice", "age": 30})
     assert errors == []
+
+
+def test_tool_execute_with_timeout_success() -> None:
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    def fast_tool(value: str) -> str:
+        return f"result: {value}"
+
+    registry = ToolRegistry()
+    spec = ToolSpec(
+        name="fast",
+        description="fast tool",
+        parameters={
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
+        },
+    )
+    registry.register(spec, fast_tool)
+    result = registry.execute("fast", {"value": "test"}, timeout_s=5.0)
+    assert result.success
+    assert result.output == "result: test"
+
+
+def test_tool_execute_timeout_parameter_accepted() -> None:
+    """Verify that the timeout parameter is accepted and works for fast tools."""
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    def quick_tool() -> str:
+        return "quick"
+
+    registry = ToolRegistry()
+    spec = ToolSpec(
+        name="quick",
+        description="quick tool",
+        parameters={"type": "object", "properties": {}},
+    )
+    registry.register(spec, quick_tool)
+    result = registry.execute("quick", {}, timeout_s=10.0)
+    assert result.success
+    assert result.output == "quick"
+
+
+def test_tool_execute_timeout_none_means_no_limit() -> None:
+    import time
+
+    from famulix.tools import ToolRegistry, ToolSpec
+
+    def medium_tool() -> str:
+        time.sleep(0.1)
+        return "done"
+
+    registry = ToolRegistry()
+    spec = ToolSpec(
+        name="medium",
+        description="medium tool",
+        parameters={"type": "object", "properties": {}},
+    )
+    registry.register(spec, medium_tool)
+    result = registry.execute("medium", {}, timeout_s=None)
+    assert result.success
+    assert result.output == "done"
