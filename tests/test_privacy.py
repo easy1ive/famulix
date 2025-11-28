@@ -781,3 +781,97 @@ def test_conflict_diagnostic_to_dict() -> None:
     d = diagnostics[0].to_dict()
     assert d["rule_a_id"] == "a"
     assert d["overlapping_actions"] == ["read"]
+
+
+def test_simulate_policy_requests_basic() -> None:
+    from famulix.privacy import PolicyEngine, PolicyRule, simulate_policy_requests
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="allow_read",
+            effect="allow",
+            actions={"read"},
+            resources={"notes"},
+            tiers={"public"},
+            priority=1,
+        )
+    )
+
+    requests = [
+        {"action": "read", "resource": "notes", "tier": "public", "actor": "user1"},
+        {"action": "write", "resource": "notes", "tier": "public", "actor": "user1"},
+    ]
+
+    result = simulate_policy_requests(engine, requests)
+    assert result["total_requests"] == 2
+    assert result["allow_count"] == 1
+    assert result["deny_count"] == 1
+    assert len(result["decisions"]) == 2
+    assert result["decisions"][0]["effect"] == "allow"
+    assert result["decisions"][1]["effect"] == "deny"
+
+
+def test_simulate_policy_requests_with_audit() -> None:
+    from famulix.privacy import AccessLog, PolicyEngine, PolicyRule, simulate_policy_requests
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="allow_all",
+            effect="allow",
+            actions={"*"},
+            resources={"*"},
+            tiers={"*"},
+            priority=1,
+        )
+    )
+    audit = AccessLog()
+
+    requests = [
+        {"action": "read", "resource": "notes", "tier": "public", "actor": "alice"},
+        {"action": "write", "resource": "calendar", "tier": "personal", "actor": "bob"},
+    ]
+
+    result = simulate_policy_requests(engine, requests, audit=audit)
+    assert result["total_requests"] == 2
+    assert result["allow_count"] == 2
+    assert audit.entry_count() == 2
+
+
+def test_simulate_policy_requests_mixed_effects() -> None:
+    from famulix.privacy import PolicyEngine, PolicyRule, simulate_policy_requests
+
+    engine = PolicyEngine()
+    engine.add_rule(
+        PolicyRule(
+            id="allow_read",
+            effect="allow",
+            actions={"read"},
+            resources={"*"},
+            tiers={"*"},
+            priority=1,
+        )
+    )
+    engine.add_rule(
+        PolicyRule(
+            id="ask_write",
+            effect="ask",
+            actions={"write"},
+            resources={"*"},
+            tiers={"*"},
+            priority=1,
+        )
+    )
+
+    requests = [
+        {"action": "read", "resource": "notes", "tier": "public", "actor": "user1"},
+        {"action": "write", "resource": "notes", "tier": "public", "actor": "user1"},
+        {"action": "delete", "resource": "notes", "tier": "public", "actor": "user1"},
+    ]
+
+    result = simulate_policy_requests(engine, requests)
+    assert result["total_requests"] == 3
+    assert result["allow_count"] == 1
+    assert result["ask_count"] == 1
+    assert result["deny_count"] == 1

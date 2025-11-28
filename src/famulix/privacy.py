@@ -490,3 +490,64 @@ def diagnose_conflicts(engine: PolicyEngine) -> list[ConflictDiagnostic]:
                     )
                 )
     return diagnostics
+
+
+def simulate_policy_requests(
+    engine: PolicyEngine,
+    requests: list[dict[str, str]],
+    *,
+    audit: AccessLog | None = None,
+) -> dict[str, object]:
+    """Simulate a batch of policy requests and return statistics.
+
+    Args:
+        engine: The policy engine to evaluate
+        requests: List of request dicts with action/resource/tier/actor keys
+        audit: Optional access log to record decisions
+
+    Returns:
+        A dict with:
+        - total_requests: count of requests evaluated
+        - allow_count: number of allowed requests
+        - deny_count: number of denied requests
+        - ask_count: number of requests requiring user confirmation
+        - decisions: list of individual decision dicts
+    """
+    decisions: list[dict[str, object]] = []
+    counts = {"allow": 0, "deny": 0, "ask": 0}
+
+    import time
+
+    for req in requests:
+        action = req.get("action", "")
+        resource = req.get("resource", "")
+        tier = req.get("tier", "")
+        actor = req.get("actor", "")
+
+        effect, matched_rule = engine.evaluate(action=action, resource=resource, tier=tier)
+
+        if audit:
+            audit.record(
+                actor=actor,
+                action=action,
+                resource=resource,
+                result=effect,
+                timestamp_s=int(time.time()),
+            )
+
+        counts[effect] += 1
+        decisions.append(
+            {
+                "request": req,
+                "effect": effect,
+                "matched_rule": matched_rule,
+            }
+        )
+
+    return {
+        "total_requests": len(requests),
+        "allow_count": counts["allow"],
+        "deny_count": counts["deny"],
+        "ask_count": counts["ask"],
+        "decisions": decisions,
+    }
