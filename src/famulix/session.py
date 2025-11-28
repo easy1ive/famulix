@@ -170,6 +170,43 @@ class SessionRecorder:
         return hashlib.sha256(text.encode()).hexdigest()
 
 
+def validate_session(recorder: SessionRecorder) -> dict[str, Any]:
+    """Validate the integrity of a session recording.
+
+    Returns a dict with:
+    - valid: bool indicating if the session is valid
+    - entry_count: number of entries
+    - checksum_valid: bool indicating if checksums are valid
+    - timestamp_monotonic: bool indicating if timestamps are non-decreasing
+    - kinds_seen: dict of event kinds and their counts
+    - errors: list of validation error messages
+    """
+    errors: list[str] = []
+
+    if not recorder.verify():
+        errors.append("session checksum verification failed")
+
+    last_timestamp = -1
+    for i, entry in enumerate(recorder.entries):
+        ts = entry.get("timestamp_s", 0)
+        if not isinstance(ts, (int, float)):
+            errors.append(f"entry {i} has non-numeric timestamp: {ts}")
+        elif ts < last_timestamp:
+            errors.append(f"entry {i} timestamp {ts} < previous {last_timestamp}")
+        last_timestamp = ts
+
+    kinds = recorder.kinds_seen()
+
+    return {
+        "valid": len(errors) == 0,
+        "entry_count": recorder.entry_count(),
+        "checksum_valid": recorder.verify(),
+        "timestamp_monotonic": not any("timestamp" in e and "previous" in e for e in errors),
+        "kinds_seen": kinds,
+        "errors": errors,
+    }
+
+
 def session_diff(a: SessionRecorder, b: SessionRecorder) -> dict[str, Any]:
     """Compare two sessions and report differences.
 

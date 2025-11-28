@@ -364,3 +364,54 @@ def test_session_kinds_seen_counts_events() -> None:
     kinds = rec.kinds_seen()
     assert kinds["event"] == 2
     assert kinds["decision"] == 1
+
+
+def test_validate_session_valid() -> None:
+    from famulix.session import SessionRecorder, validate_session
+
+    rec = SessionRecorder(session_id="test", seed=42)
+    rec.record("event", {"data": "one"}, timestamp_s=100)
+    rec.record("event", {"data": "two"}, timestamp_s=200)
+
+    result = validate_session(rec)
+    assert result["valid"]
+    assert result["entry_count"] == 2
+    assert result["checksum_valid"]
+    assert result["timestamp_monotonic"]
+    assert result["errors"] == []
+
+
+def test_validate_session_detects_tampering() -> None:
+    from famulix.session import SessionRecorder, validate_session
+
+    rec = SessionRecorder(session_id="test", seed=42)
+    rec.record("event", {"data": "one"}, timestamp_s=100)
+    rec.entries[0]["payload"] = {"data": "tampered"}
+
+    result = validate_session(rec)
+    assert not result["valid"]
+    assert not result["checksum_valid"]
+    assert len(result["errors"]) > 0
+
+
+def test_validate_session_detects_non_monotonic_timestamps() -> None:
+    from famulix.session import SessionRecorder, validate_session
+
+    rec = SessionRecorder(session_id="test", seed=42)
+    rec.record("event", {"data": "one"}, timestamp_s=200)
+    rec.record("event", {"data": "two"}, timestamp_s=100)
+
+    result = validate_session(rec)
+    assert not result["valid"]
+    assert not result["timestamp_monotonic"]
+    assert any("timestamp" in e for e in result["errors"])
+
+
+def test_validate_session_empty() -> None:
+    from famulix.session import SessionRecorder, validate_session
+
+    rec = SessionRecorder(session_id="test", seed=42)
+    result = validate_session(rec)
+    assert result["valid"]
+    assert result["entry_count"] == 0
+    assert result["kinds_seen"] == {}
