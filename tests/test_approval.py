@@ -306,3 +306,91 @@ def test_escalate_uses_registered_chain() -> None:
     assert req.escalation_level == 2
     assert req.approver == "director"
     assert not queue.escalate("r1", 1700)  # end of chain
+
+
+def test_approval_queue_metrics_report_structure() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    queue = ApprovalQueue()
+    req1 = ApprovalRequest(
+        request_id="r1",
+        requester="dev",
+        action="deploy",
+        resource="prod",
+        status="pending",
+        created_at_s=1000,
+        expires_at_s=2000,
+    )
+    req2 = ApprovalRequest(
+        request_id="r2",
+        requester="dev",
+        action="deploy",
+        resource="staging",
+        status="pending",
+        created_at_s=1100,
+        expires_at_s=2100,
+    )
+    queue.submit(req1)
+    queue.submit(req2)
+    queue.decide("r1", "approved", "manager", 1500)
+
+    report = queue.metrics_report()
+    assert report["total_requests"] == 2
+    assert report["pending_count"] == 1
+    assert report["approved_count"] == 1
+    assert report["denied_count"] == 0
+    assert report["expired_count"] == 0
+    assert "average_decision_time_s" in report
+    assert "by_action" in report
+    assert "deploy" in report["by_action"]
+
+
+def test_approval_queue_metrics_report_by_action() -> None:
+    from famulix.approval import ApprovalQueue, ApprovalRequest
+
+    queue = ApprovalQueue()
+    req1 = ApprovalRequest(
+        request_id="r1",
+        requester="dev",
+        action="deploy",
+        resource="prod",
+        status="pending",
+        created_at_s=1000,
+        expires_at_s=2000,
+    )
+    req2 = ApprovalRequest(
+        request_id="r2",
+        requester="dev",
+        action="delete",
+        resource="data",
+        status="pending",
+        created_at_s=1100,
+        expires_at_s=2100,
+    )
+    queue.submit(req1)
+    queue.submit(req2)
+    queue.decide("r1", "approved", "manager", 1500)
+    queue.decide("r2", "denied", "admin", 1600)
+
+    report = queue.metrics_report()
+    by_action = report["by_action"]
+    assert by_action["deploy"]["total"] == 1
+    assert by_action["deploy"]["approved"] == 1
+    assert by_action["delete"]["total"] == 1
+    assert by_action["delete"]["denied"] == 1
+
+
+def test_approval_queue_metrics_report_empty() -> None:
+    from famulix.approval import ApprovalQueue
+
+    queue = ApprovalQueue()
+    report = queue.metrics_report()
+    assert report["total_requests"] == 0
+    assert report["pending_count"] == 0
+    assert report["approved_count"] == 0
+    assert report["denied_count"] == 0
+    assert report["expired_count"] == 0
+    assert report["escalated_count"] == 0
+    assert report["average_decision_time_s"] == 0.0
+    assert report["escalation_chains"] == 0
+    assert report["by_action"] == {}
