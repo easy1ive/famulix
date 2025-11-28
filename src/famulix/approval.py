@@ -175,3 +175,48 @@ class ApprovalQueue:
     def chain_depth(self, action: str) -> int:
         """Return the length of the escalation chain for an action."""
         return len(self.escalation_chains.get(action, []))
+
+    def metrics_report(self) -> dict[str, object]:
+        """Generate a comprehensive metrics report for the approval queue.
+
+        Returns a dict with:
+        - total_requests: total number of requests submitted
+        - pending_count: currently pending requests
+        - approved_count: approved requests
+        - denied_count: denied requests
+        - expired_count: expired requests
+        - escalated_count: escalated requests
+        - average_decision_time_s: average time to decision
+        - escalation_chains: number of registered chains
+        - by_action: breakdown by action type
+        """
+        approved = sum(1 for r in self.requests if r.status == "approved")
+        denied = sum(1 for r in self.requests if r.status == "denied")
+        expired = sum(1 for r in self.requests if r.status == "expired")
+        escalated = sum(1 for r in self.requests if r.status == "escalated")
+        pending = sum(1 for r in self.requests if r.status == "pending")
+
+        by_action: dict[str, dict[str, int]] = {}
+        for req in self.requests:
+            action = req.action
+            if action not in by_action:
+                by_action[action] = {"total": 0, "approved": 0, "denied": 0, "expired": 0}
+            by_action[action]["total"] += 1
+            if req.status == "approved":
+                by_action[action]["approved"] += 1
+            elif req.status == "denied":
+                by_action[action]["denied"] += 1
+            elif req.status == "expired":
+                by_action[action]["expired"] += 1
+
+        return {
+            "total_requests": len(self.requests),
+            "pending_count": pending,
+            "approved_count": approved,
+            "denied_count": denied,
+            "expired_count": expired,
+            "escalated_count": escalated,
+            "average_decision_time_s": self.average_decision_time(),
+            "escalation_chains": len(self.escalation_chains),
+            "by_action": by_action,
+        }
