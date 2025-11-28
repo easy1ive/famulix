@@ -272,10 +272,13 @@ class ToolRegistry:
         idempotency_key: str | None = None,
         seed: int = 0,
         granted_capabilities: set[str] | None = None,
+        timeout_s: float | None = None,
     ) -> ToolResult:
         """Execute a tool with validation, capability checks, and bounded retries.
 
         The seed parameter is used for deterministic jitter in retries.
+        If timeout_s is provided, the tool execution will be aborted if it
+        exceeds the timeout (returns a timeout error).
         """
         if name not in self._tools:
             return ToolResult(
@@ -330,6 +333,16 @@ class ToolRegistry:
         retries = 0
 
         for attempt in range(spec.max_retries + 1):
+            if timeout_s is not None and (time.monotonic() - start) >= timeout_s:
+                duration = time.monotonic() - start
+                return ToolResult(
+                    tool_name=name,
+                    success=False,
+                    output=None,
+                    error=f"timeout after {duration:.3f}s (limit: {timeout_s}s)",
+                    duration_s=round(duration, 6),
+                    retries=retries,
+                )
             try:
                 output = handler(**arguments)
                 duration = time.monotonic() - start
