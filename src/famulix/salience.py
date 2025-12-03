@@ -178,3 +178,42 @@ def diagnostics_by_kind(
             by_kind[kind] = {}
         by_kind[kind][node.node_id] = scores.get(node.node_id, 0.0)
     return {kind: slice_diagnostics(kind_scores) for kind, kind_scores in by_kind.items()}
+
+
+def salience_report(
+    graph: MemoryGraph,
+    *,
+    now_s: int,
+    config: SalienceConfig | None = None,
+) -> dict[str, object]:
+    """Generate a comprehensive salience report for the graph.
+
+    Returns a dict with:
+    - overall: slice diagnostics for all scores
+    - by_kind: diagnostics grouped by node kind
+    - top_nodes: top 10 nodes by salience score
+    - score_distribution: histogram-like breakdown of score ranges
+    """
+    scores = score_all_nodes(graph, now_s=now_s, config=config)
+    overall = slice_diagnostics(scores)
+    by_kind = diagnostics_by_kind(graph, now_s=now_s, config=config)
+    top_nodes = top_k(scores, 10)
+
+    # Score distribution in buckets
+    distribution = {"high": 0, "medium": 0, "low": 0, "very_low": 0}
+    for score in scores.values():
+        if score >= 0.7:
+            distribution["high"] += 1
+        elif score >= 0.4:
+            distribution["medium"] += 1
+        elif score >= 0.1:
+            distribution["low"] += 1
+        else:
+            distribution["very_low"] += 1
+
+    return {
+        "overall": overall,
+        "by_kind": by_kind,
+        "top_nodes": top_nodes,
+        "score_distribution": distribution,
+    }

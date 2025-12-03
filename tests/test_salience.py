@@ -203,3 +203,49 @@ def test_slice_diagnostics_empty_scores() -> None:
     stats = slice_diagnostics({})
     assert stats["count"] == 0.0
     assert stats["mean"] == 0.0
+
+
+def test_salience_report_empty_graph() -> None:
+    from famulix.memory_graph import MemoryGraph
+    from famulix.salience import salience_report
+
+    graph = MemoryGraph()
+    report = salience_report(graph, now_s=100)
+    assert report["overall"]["count"] == 0.0
+    assert report["by_kind"] == {}
+    assert report["top_nodes"] == []
+    assert report["score_distribution"]["high"] == 0
+
+
+def test_salience_report_with_nodes() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.salience import salience_report
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "important", "body", created_at_s=90, metadata={"tier": "hot"})
+    n2 = MemoryNode.create("entity", "person", "body", created_at_s=50)
+    graph.add_node(n1)
+    graph.add_node(n2)
+
+    report = salience_report(graph, now_s=100)
+    assert report["overall"]["count"] == 2.0
+    assert "fact" in report["by_kind"]
+    assert "entity" in report["by_kind"]
+    assert len(report["top_nodes"]) == 2
+    assert sum(report["score_distribution"].values()) == 2
+
+
+def test_salience_report_score_distribution() -> None:
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+    from famulix.salience import salience_report
+
+    graph = MemoryGraph()
+    # Create nodes with different ages to get different scores
+    for i in range(5):
+        n = MemoryNode.create("fact", f"fact_{i}", "body", created_at_s=100 - i * 20)
+        graph.add_node(n)
+
+    report = salience_report(graph, now_s=100)
+    dist = report["score_distribution"]
+    assert sum(dist.values()) == 5
+    assert all(v >= 0 for v in dist.values())
