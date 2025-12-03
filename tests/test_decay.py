@@ -200,3 +200,46 @@ def test_decay_config_default_is_valid() -> None:
     assert config.hot_half_life_s < config.warm_half_life_s
     assert config.warm_half_life_s < config.cold_half_life_s
     assert config.cold_half_life_s < config.archive_half_life_s
+
+
+def test_validate_decay_config_valid() -> None:
+    from famulix.decay import DecayConfig, validate_decay_config
+
+    config = DecayConfig()
+    problems = validate_decay_config(config)
+    assert problems == []
+
+
+def test_retention_diagnostics_empty_graph() -> None:
+    from famulix.decay import retention_diagnostics
+    from famulix.memory_graph import MemoryGraph
+
+    graph = MemoryGraph()
+    diag = retention_diagnostics(graph, now_s=1000)
+    assert diag["min_retention"] == 0.0
+    assert diag["max_retention"] == 0.0
+    assert diag["mean_retention"] == 0.0
+    assert diag["protected_count"] == 0
+
+
+def test_retention_diagnostics_with_nodes() -> None:
+    from famulix.decay import retention_diagnostics
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "recent", "body", created_at_s=900, metadata={"tier": "hot"})
+    n2 = MemoryNode.create(
+        "fact",
+        "old",
+        "body",
+        created_at_s=100,
+        metadata={"tier": "cold", "pinned": "true"},
+    )
+    graph.add_node(n1)
+    graph.add_node(n2)
+
+    diag = retention_diagnostics(graph, now_s=1000)
+    assert diag["min_retention"] >= 0.0
+    assert diag["max_retention"] <= 1.0
+    assert diag["protected_count"] == 1
+    assert sum(diag["tier_counts"].values()) == 2

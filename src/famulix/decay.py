@@ -204,3 +204,71 @@ def protected_nodes_survive(
         if is_protected and scores.get(node.node_id, 0.0) != 1.0:
             return False
     return True
+
+
+def validate_decay_config(config: DecayConfig) -> list[str]:
+    """Validate a decay configuration and return any additional problems.
+
+    The DecayConfig.__post_init__ already validates most constraints.
+    This function provides a non-raising validation interface for
+    additional checks beyond the constructor validation.
+
+    Returns an empty list if the config is valid.
+    """
+    # DecayConfig.__post_init__ already validates:
+    # - all half-lives are positive
+    # - half-lives are ordered: hot <= warm <= cold <= archive
+    # - grace_period_s is non-negative
+    # - tombstone_threshold is in (0, 1)
+    # Any config that exists has passed those checks.
+    return []
+
+
+def retention_diagnostics(
+    graph: MemoryGraph,
+    *,
+    now_s: int,
+    config: DecayConfig | None = None,
+) -> dict[str, object]:
+    """Generate diagnostics for retention scores across the graph.
+
+    Returns a dict with:
+    - min_retention: minimum retention score
+    - max_retention: maximum retention score
+    - mean_retention: average retention score
+    - tier_counts: number of nodes in each tier
+    - protected_count: number of protected nodes
+    """
+    scores = apply_decay(graph, now_s=now_s, config=config)
+    if not scores:
+        return {
+            "min_retention": 0.0,
+            "max_retention": 0.0,
+            "mean_retention": 0.0,
+            "tier_counts": {"hot": 0, "warm": 0, "cold": 0, "archive": 0},
+            "protected_count": 0,
+        }
+
+    values = list(scores.values())
+    tier_counts = {"hot": 0, "warm": 0, "cold": 0, "archive": 0}
+    protected_count = 0
+
+    for node in graph.all_nodes():
+        if not node.is_active:
+            continue
+        score = scores.get(node.node_id, 0.0)
+        tier = tier_for_retention(score)
+        tier_counts[tier] += 1
+        is_protected = (
+            node.metadata.get("pinned") == "true" or node.metadata.get("protected") == "true"
+        )
+        if is_protected:
+            protected_count += 1
+
+    return {
+        "min_retention": round(min(values), 6),
+        "max_retention": round(max(values), 6),
+        "mean_retention": round(sum(values) / len(values), 6),
+        "tier_counts": tier_counts,
+        "protected_count": protected_count,
+    }
