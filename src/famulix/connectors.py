@@ -198,3 +198,58 @@ class FlakyConnector:
         if self.calls % self.fail_every == 0:
             raise ConnectorError(self.source)
         return self.inner.collect()
+
+
+def validate_connector_batch(batch: ConnectorBatch) -> list[str]:
+    """Validate a connector batch for consistency.
+
+    Checks:
+    - Source is non-empty
+    - All records have the same source
+    - All records have valid timestamps
+    - Checksum is valid
+
+    Returns a list of validation problems found.
+    """
+    problems: list[str] = []
+
+    if not batch.source or not batch.source.strip():
+        problems.append("batch source is empty")
+
+    for i, record in enumerate(batch.records):
+        if record.source != batch.source:
+            problems.append(
+                f"record[{i}] source '{record.source}' != batch source '{batch.source}'"
+            )
+        if record.timestamp_s < 0:
+            problems.append(f"record[{i}] has negative timestamp {record.timestamp_s}")
+        if not record.title or not record.title.strip():
+            problems.append(f"record[{i}] has empty title")
+
+    if not batch.verify():
+        problems.append("batch checksum verification failed")
+
+    return problems
+
+
+def connector_hub_diagnostics(hub: ConnectorHub) -> dict[str, object]:
+    """Generate diagnostics for a connector hub.
+
+    Returns a dict with:
+    - connector_count: number of connectors
+    - sources: list of source names
+    - total_records: total records across all batches
+    - per_source_counts: record count per source
+    """
+    batches = hub.collect()
+    total_records = sum(len(b.records) for b in batches)
+    per_source: dict[str, int] = {}
+    for batch in batches:
+        per_source[batch.source] = len(batch.records)
+
+    return {
+        "connector_count": len(batches),
+        "sources": [b.source for b in batches],
+        "total_records": total_records,
+        "per_source_counts": per_source,
+    }
