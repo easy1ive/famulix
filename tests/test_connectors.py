@@ -220,3 +220,53 @@ def test_connector_hub_rejects_duplicate_sources() -> None:
     c2 = ScriptedConnector(source="cal", records=(r2,))
     with pytest.raises(ValueError, match="unique"):
         ConnectorHub([c1, c2])
+
+
+def test_validate_connector_batch_valid() -> None:
+    from famulix.connectors import ConnectorBatch, ConnectorRecord, validate_connector_batch
+
+    record = ConnectorRecord(
+        source="test", external_id="e1", kind="note", timestamp_s=100, title="Title", body="Body"
+    )
+    batch = ConnectorBatch.create("test", [record])
+    problems = validate_connector_batch(batch)
+    assert problems == []
+
+
+def test_validate_connector_batch_detects_empty_title() -> None:
+    from famulix.connectors import ConnectorBatch, ConnectorRecord, validate_connector_batch
+
+    record = ConnectorRecord(
+        source="test", external_id="e1", kind="note", timestamp_s=100, title="", body=""
+    )
+    batch = ConnectorBatch.create("test", [record])
+    problems = validate_connector_batch(batch)
+    assert len(problems) >= 1
+    assert any("empty title" in p for p in problems)
+
+
+def test_connector_hub_diagnostics() -> None:
+    from famulix.connectors import (
+        ConnectorHub,
+        ConnectorRecord,
+        ScriptedConnector,
+        connector_hub_diagnostics,
+    )
+
+    r1 = ConnectorRecord(
+        source="cal", external_id="c1", kind="calendar", timestamp_s=100, title="M", body="b"
+    )
+    r2 = ConnectorRecord(
+        source="notes", external_id="n1", kind="note", timestamp_s=200, title="N", body="b"
+    )
+    c1 = ScriptedConnector(source="cal", records=(r1,))
+    c2 = ScriptedConnector(source="notes", records=(r2,))
+    hub = ConnectorHub([c1, c2])
+
+    diag = connector_hub_diagnostics(hub)
+    assert diag["connector_count"] == 2
+    assert "cal" in diag["sources"]
+    assert "notes" in diag["sources"]
+    assert diag["total_records"] == 2
+    assert diag["per_source_counts"]["cal"] == 1
+    assert diag["per_source_counts"]["notes"] == 1
