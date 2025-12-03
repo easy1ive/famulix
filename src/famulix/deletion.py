@@ -155,3 +155,66 @@ def deleted_content_never_reappears(
         if nid in deleted_ids:
             return False
     return True
+
+
+def verify_deletion_cascade(graph: MemoryGraph, deleted_id: str) -> dict[str, object]:
+    """Verify that a deletion cascaded correctly through the graph.
+
+    Checks:
+    - The node is marked as deleted
+    - All edges to/from the node are removed or marked
+    - No active edges reference the deleted node
+    - No active nodes derive from the deleted node
+
+    Returns a dict with verification results and any violations found.
+    """
+    violations: list[str] = []
+
+    node = graph.get_node(deleted_id)
+    if node is None:
+        return {
+            "verified": False,
+            "node_exists": False,
+            "violations": ["node not found in graph"],
+        }
+
+    if node.metadata.get("deleted") != "true":
+        violations.append("node is not marked as deleted")
+
+    # Check for active edges referencing this node
+    for edge in graph.all_edges():
+        if edge.from_id == deleted_id or edge.to_id == deleted_id:
+            violations.append(f"active edge {edge.edge_id} references deleted node")
+
+    # Check for active nodes that derive from this node
+    for other_node in graph.all_nodes():
+        if other_node.node_id == deleted_id:
+            continue
+        if not other_node.is_active:
+            continue
+        for edge in graph.out_edges(other_node.node_id):
+            if edge.kind == "derived_from" and edge.to_id == deleted_id:
+                violations.append(f"active node {other_node.node_id} derives from deleted node")
+
+    return {
+        "verified": len(violations) == 0,
+        "node_exists": True,
+        "violations": violations,
+    }
+
+
+def validate_deletion_integrity(graph: MemoryGraph) -> list[str]:
+    """Validate that all deletions in the graph are consistent.
+
+    Returns a list of integrity violations found.
+    """
+    violations: list[str] = []
+
+    deleted_nodes = [n for n in graph.all_nodes() if n.metadata.get("deleted") == "true"]
+
+    for node in deleted_nodes:
+        result = verify_deletion_cascade(graph, node.node_id)
+        for violation in result["violations"]:
+            violations.append(f"node {node.node_id}: {violation}")
+
+    return violations
