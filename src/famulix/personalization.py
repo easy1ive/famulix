@@ -217,6 +217,64 @@ def style_summary(style: BriefingStyle) -> dict[str, str]:
     }
 
 
+def personalization_diagnostics(
+    style: BriefingStyle,
+    explanation: list[str] | None = None,
+) -> dict[str, object]:
+    """Generate diagnostics for a personalization result.
+
+    Returns a dict with:
+    - style: the briefing style choices
+    - explanation_count: number of explanation reasons
+    - has_tone: whether a tone was chosen
+    - has_format: whether a format was chosen
+    - has_ordering: whether an ordering was chosen
+    """
+    return {
+        "style": style_summary(style),
+        "explanation_count": len(explanation) if explanation else 0,
+        "has_tone": bool(style.tone),
+        "has_format": bool(style.format),
+        "has_ordering": bool(style.ordering),
+    }
+
+
+def compare_personalization_variants(
+    variants: dict[str, BriefingStyle],
+) -> dict[str, object]:
+    """Compare multiple personalization variants.
+
+    Returns a dict with:
+    - variant_count: number of variants compared
+    - variant_names: list of variant names
+    - differences: dict showing which fields differ across variants
+    """
+    if not variants:
+        return {
+            "variant_count": 0,
+            "variant_names": [],
+            "differences": {},
+        }
+
+    names = list(variants.keys())
+    styles = list(variants.values())
+
+    # Check which fields differ
+    differences: dict[str, list[str]] = {}
+    for attr_name in ["tone", "format", "ordering", "length"]:
+        values = [getattr(s, attr_name) for s in styles]
+        if len(set(values)) > 1:
+            differences[attr_name] = [
+                f"{name}: {val}" for name, val in zip(names, values, strict=False)
+            ]
+
+    return {
+        "variant_count": len(variants),
+        "variant_names": names,
+        "differences": differences,
+    }
+
+
 def _number(value: object, default: float) -> float:
     """Read a numeric sort field without accepting arbitrary objects."""
     return float(value) if isinstance(value, (int, float)) else default

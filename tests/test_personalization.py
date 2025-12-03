@@ -215,3 +215,79 @@ def test_counterfactual_compare_shows_profile_differences() -> None:
     assert diff["tone"]["a"] == "formal"
     assert diff["tone"]["b"] == "casual"
     assert diff["tone"]["changed"] is True
+
+
+def test_personalization_diagnostics() -> None:
+    from famulix.personalization import BriefingStyle, personalization_diagnostics
+
+    style = BriefingStyle(
+        tone="formal",
+        format="bullet",
+        ordering="salience",
+        length="medium",
+    )
+    diag = personalization_diagnostics(style, explanation=["reason1", "reason2"])
+    assert diag["explanation_count"] == 2
+    assert diag["has_tone"]
+    assert diag["has_format"]
+    assert diag["has_ordering"]
+    assert diag["style"]["tone"] == "formal"
+
+
+def test_personalization_diagnostics_empty_explanation() -> None:
+    from famulix.personalization import BriefingStyle, personalization_diagnostics
+
+    style = BriefingStyle(
+        tone="casual",
+        format="prose",
+        ordering="recency",
+        length="short",
+    )
+    diag = personalization_diagnostics(style, explanation=None)
+    assert diag["explanation_count"] == 0
+
+
+def test_compare_personalization_variants_empty() -> None:
+    from famulix.personalization import compare_personalization_variants
+
+    result = compare_personalization_variants({})
+    assert result["variant_count"] == 0
+    assert result["variant_names"] == []
+    assert result["differences"] == {}
+
+
+def test_compare_personalization_variants_identical() -> None:
+    from famulix.personalization import BriefingStyle, compare_personalization_variants
+
+    style = BriefingStyle(
+        tone="formal",
+        format="bullet",
+        ordering="salience",
+        length="medium",
+    )
+    result = compare_personalization_variants({"a": style, "b": style})
+    assert result["variant_count"] == 2
+    assert result["differences"] == {}
+
+
+def test_compare_personalization_variants_different() -> None:
+    from famulix.personalization import BriefingStyle, compare_personalization_variants
+
+    style_a = BriefingStyle(
+        tone="formal",
+        format="bullet",
+        ordering="salience",
+        length="medium",
+    )
+    style_b = BriefingStyle(
+        tone="casual",
+        format="prose",
+        ordering="recency",
+        length="medium",
+    )
+    result = compare_personalization_variants({"formal": style_a, "casual": style_b})
+    assert result["variant_count"] == 2
+    assert "tone" in result["differences"]
+    assert "format" in result["differences"]
+    assert "ordering" in result["differences"]
+    assert "length" not in result["differences"]
