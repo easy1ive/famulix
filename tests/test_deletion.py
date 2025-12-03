@@ -265,3 +265,57 @@ def test_deletion_of_already_deleted_node_is_idempotent() -> None:
     report2 = delete_memory(graph, node.node_id, cascade=True)
     assert report1.total_deleted >= 1
     assert report2.total_deleted == 0
+
+
+def test_verify_deletion_cascade_successful() -> None:
+    from famulix.deletion import delete_memory, verify_deletion_cascade
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "f1", "body", created_at_s=100)
+    n2 = MemoryNode.create("entity", "e1", "body", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+
+    delete_memory(graph, n1.node_id, cascade=True)
+
+    result = verify_deletion_cascade(graph, n1.node_id)
+    assert result["verified"]
+    assert result["node_exists"]
+    assert result["violations"] == []
+
+
+def test_verify_deletion_cascade_missing_node() -> None:
+    from famulix.deletion import verify_deletion_cascade
+    from famulix.memory_graph import MemoryGraph
+
+    graph = MemoryGraph()
+    result = verify_deletion_cascade(graph, "nonexistent")
+    assert not result["verified"]
+    assert not result["node_exists"]
+    assert len(result["violations"]) > 0
+
+
+def test_validate_deletion_integrity_clean() -> None:
+    from famulix.deletion import delete_memory, validate_deletion_integrity
+    from famulix.memory_graph import MemoryGraph, MemoryNode
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "f1", "body", created_at_s=100)
+    n2 = MemoryNode.create("fact", "f2", "body", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+
+    delete_memory(graph, n1.node_id, cascade=True)
+
+    violations = validate_deletion_integrity(graph)
+    assert violations == []
+
+
+def test_validate_deletion_integrity_empty_graph() -> None:
+    from famulix.deletion import validate_deletion_integrity
+    from famulix.memory_graph import MemoryGraph
+
+    graph = MemoryGraph()
+    violations = validate_deletion_integrity(graph)
+    assert violations == []
