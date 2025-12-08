@@ -130,3 +130,75 @@ def test_envelope_rejects_empty_kind() -> None:
 
     with pytest.raises(ValueError, match="non-empty"):
         Envelope.wrap("", {"data": "test"})
+
+
+def test_validate_envelope_valid() -> None:
+    from famulix.envelope import Envelope, validate_envelope
+
+    env = Envelope.wrap("note", {"text": "hello"})
+    problems = validate_envelope(env)
+    assert problems == []
+
+
+def test_validate_envelope_detects_problems() -> None:
+    from famulix.envelope import Envelope, validate_envelope
+
+    env = Envelope.wrap("note", {"text": "hello"})
+    # Manually break it by replacing the frozen dataclass
+    broken = Envelope(
+        schema_version=env.schema_version,
+        kind="",
+        payload=env.payload,
+        checksum=env.checksum,
+    )
+    problems = validate_envelope(broken)
+    assert len(problems) >= 1
+    assert any("kind" in p for p in problems)
+
+
+def test_batch_verify_all_valid() -> None:
+    from famulix.envelope import Envelope, batch_verify
+
+    envelopes = [
+        Envelope.wrap("note", {"text": "one"}),
+        Envelope.wrap("note", {"text": "two"}),
+    ]
+    valid_count, errors = batch_verify(envelopes)
+    assert valid_count == 2
+    assert errors == []
+
+
+def test_batch_verify_with_invalid() -> None:
+    from famulix.envelope import Envelope, batch_verify
+
+    env1 = Envelope.wrap("note", {"text": "valid"})
+    env2_good = Envelope.wrap("note", {"text": "tampered"})
+    env2 = Envelope(
+        schema_version=env2_good.schema_version,
+        kind=env2_good.kind,
+        payload=env2_good.payload,
+        checksum="wrong_checksum",
+    )
+
+    valid_count, errors = batch_verify([env1, env2])
+    assert valid_count == 1
+    assert len(errors) == 1
+
+
+def test_envelope_statistics_empty() -> None:
+    from famulix.envelope import envelope_statistics
+
+    stats = envelope_statistics([])
+    assert stats["count"] == 0
+    assert stats["schema_versions"] == set()
+
+
+def test_envelope_statistics_with_data() -> None:
+    from famulix.envelope import Envelope, envelope_statistics
+
+    env1 = Envelope.wrap("note", {"text": "one"})
+    env2 = Envelope.wrap("note", {"text": "two"})
+    stats = envelope_statistics([env1, env2])
+    assert stats["count"] == 2
+    assert len(stats["schema_versions"]) == 1
+    assert "checksum_lengths" in stats

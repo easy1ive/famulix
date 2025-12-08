@@ -99,3 +99,75 @@ class Envelope:
 
 def _reject_json_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def validate_envelope(env: Envelope) -> list[str]:
+    """Validate an envelope for structural correctness.
+
+    Checks:
+    - schema_version is valid
+    - kind is non-empty
+    - checksum is non-empty
+    - payload is a dict
+
+    Returns a list of validation problems found.
+    """
+    problems: list[str] = []
+
+    if env.schema_version not in (1,):
+        problems.append(f"unsupported schema_version: {env.schema_version}")
+
+    if not env.kind or not env.kind.strip():
+        problems.append("kind must be non-empty")
+
+    if not env.checksum or not env.checksum.strip():
+        problems.append("checksum must be non-empty")
+
+    if not isinstance(env.payload, dict):
+        problems.append(f"payload must be a dict, got {type(env.payload).__name__}")
+
+    return problems
+
+
+def batch_verify(envelopes: list[Envelope]) -> tuple[int, list[str]]:
+    """Verify a batch of envelopes and return (valid_count, errors).
+
+    Returns the number of valid envelopes and a list of error messages
+    for any that fail verification.
+    """
+    valid_count = 0
+    errors: list[str] = []
+
+    for i, env in enumerate(envelopes):
+        try:
+            if env.verify():
+                valid_count += 1
+        except ValueError as exc:
+            errors.append(f"envelope[{i}]: {exc}")
+
+    return valid_count, errors
+
+
+def envelope_statistics(envelopes: list[Envelope]) -> dict[str, object]:
+    """Generate statistics for a batch of envelopes.
+
+    Returns a dict with:
+    - count: total number of envelopes
+    - schema_versions: set of schema versions seen
+    - kinds: set of envelope kinds seen
+    - checksum_lengths: set of checksum lengths
+    """
+    if not envelopes:
+        return {
+            "count": 0,
+            "schema_versions": set(),
+            "kinds": set(),
+            "checksum_lengths": set(),
+        }
+
+    return {
+        "count": len(envelopes),
+        "schema_versions": {e.schema_version for e in envelopes},
+        "kinds": {e.kind for e in envelopes},
+        "checksum_lengths": {len(e.checksum) for e in envelopes},
+    }
