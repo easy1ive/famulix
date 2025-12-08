@@ -119,3 +119,73 @@ def test_event_from_envelope_roundtrip() -> None:
     assert restored.event_id == original.event_id
     assert restored.timestamp_s == original.timestamp_s
     assert restored.data == original.data
+
+
+def test_validate_event_valid() -> None:
+    from famulix.events import Event, validate_event
+
+    event = Event.create("note", timestamp_s=100, source="test", data={"text": "hello"})
+    problems = validate_event(event)
+    assert problems == []
+
+
+def test_validate_event_detects_problems() -> None:
+    from famulix.events import Event, validate_event
+
+    event = Event.create("note", timestamp_s=100, source="test", data={"text": "hello"})
+    # Create a broken event
+    broken = Event(
+        event_id="",
+        event_type=event.event_type,
+        timestamp_s=-1,
+        source="",
+        data=event.data,
+    )
+    problems = validate_event(broken)
+    assert len(problems) >= 2
+    assert any("event_id" in p for p in problems)
+    assert any("timestamp_s" in p for p in problems)
+
+
+def test_batch_validate_events_all_valid() -> None:
+    from famulix.events import Event, batch_validate_events
+
+    events = [
+        Event.create("note", timestamp_s=100, source="s1", data={}),
+        Event.create("note", timestamp_s=200, source="s2", data={}),
+    ]
+    valid_count, errors = batch_validate_events(events)
+    assert valid_count == 2
+    assert errors == []
+
+
+def test_batch_validate_events_with_invalid() -> None:
+    from famulix.events import Event, batch_validate_events
+
+    good = Event.create("note", timestamp_s=100, source="s1", data={})
+    bad = Event(event_id="", event_type="note", timestamp_s=-1, source="", data={})
+    valid_count, errors = batch_validate_events([good, bad])
+    assert valid_count == 1
+    assert len(errors) >= 2
+
+
+def test_event_statistics_empty() -> None:
+    from famulix.events import event_statistics
+
+    stats = event_statistics([])
+    assert stats["count"] == 0
+    assert stats["event_types"] == set()
+
+
+def test_event_statistics_with_data() -> None:
+    from famulix.events import Event, event_statistics
+
+    events = [
+        Event.create("note", timestamp_s=100, source="s1", data={}),
+        Event.create("calendar", timestamp_s=200, source="s2", data={}),
+    ]
+    stats = event_statistics(events)
+    assert stats["count"] == 2
+    assert "note" in stats["event_types"]
+    assert "calendar" in stats["event_types"]
+    assert stats["timestamp_range"] == (100, 200)

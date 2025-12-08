@@ -134,3 +134,81 @@ def feedback_event(
         source,
         {"target_id": target_id, "rating": rating},
     )
+
+
+def validate_event(event: Event) -> list[str]:
+    """Validate an event for structural correctness.
+
+    Checks:
+    - event_id is non-empty
+    - event_type is non-empty
+    - timestamp_s is non-negative
+    - source is non-empty
+    - data is a dict
+
+    Returns a list of validation problems found.
+    """
+    problems: list[str] = []
+
+    if not event.event_id or not event.event_id.strip():
+        problems.append("event_id must be non-empty")
+
+    if not event.event_type or not event.event_type.strip():
+        problems.append("event_type must be non-empty")
+
+    if event.timestamp_s < 0:
+        problems.append(f"timestamp_s must be non-negative, got {event.timestamp_s}")
+
+    if not event.source or not event.source.strip():
+        problems.append("source must be non-empty")
+
+    if not isinstance(event.data, dict):
+        problems.append(f"data must be a dict, got {type(event.data).__name__}")
+
+    return problems
+
+
+def batch_validate_events(events: list[Event]) -> tuple[int, list[str]]:
+    """Validate a batch of events and return (valid_count, errors).
+
+    Returns the number of valid events and a list of error messages
+    for any that fail validation.
+    """
+    valid_count = 0
+    errors: list[str] = []
+
+    for i, event in enumerate(events):
+        problems = validate_event(event)
+        if problems:
+            for problem in problems:
+                errors.append(f"event[{i}]: {problem}")
+        else:
+            valid_count += 1
+
+    return valid_count, errors
+
+
+def event_statistics(events: list[Event]) -> dict[str, object]:
+    """Generate statistics for a batch of events.
+
+    Returns a dict with:
+    - count: total number of events
+    - event_types: set of event types seen
+    - sources: set of sources seen
+    - timestamp_range: (min, max) timestamps
+    """
+    if not events:
+        return {
+            "count": 0,
+            "event_types": set(),
+            "sources": set(),
+            "timestamp_range": (0, 0),
+        }
+
+    timestamps = [e.timestamp_s for e in events]
+    return {
+        "count": len(events),
+        "event_types": {e.event_type for e in events},
+        "sources": {e.source for e in events},
+        "timestamp_range": (min(timestamps), max(timestamps)),
+    }
