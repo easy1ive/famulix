@@ -143,3 +143,59 @@ def test_synthetic_clock_advances_time() -> None:
     clock3 = clock2.advance(200)
     dt3 = clock3.now()
     assert dt3 > dt2
+
+
+def test_validate_timezone_offset_valid() -> None:
+    from famulix.clock import validate_timezone_offset
+
+    problems = validate_timezone_offset(8)
+    assert problems == []
+
+    problems = validate_timezone_offset(-5)
+    assert problems == []
+
+
+def test_validate_timezone_offset_invalid() -> None:
+    from famulix.clock import validate_timezone_offset
+
+    problems = validate_timezone_offset(15)
+    assert len(problems) == 1
+    assert "[-12, 14]" in problems[0]
+
+    problems = validate_timezone_offset("not_int")  # type: ignore
+    assert len(problems) == 1
+    assert "integer" in problems[0]
+
+
+def test_timestamp_to_local() -> None:
+    from famulix.clock import timestamp_to_local
+
+    result = timestamp_to_local(0, tz_offset_hours=0)
+    assert "1970-01-01" in result
+
+
+def test_is_within_time_range() -> None:
+    from famulix.clock import is_within_time_range
+
+    assert is_within_time_range(500, 100, 1000)
+    assert is_within_time_range(100, 100, 1000)
+    assert not is_within_time_range(1000, 100, 1000)  # end is exclusive
+    assert not is_within_time_range(50, 100, 1000)
+
+
+def test_count_days_between() -> None:
+    from famulix.clock import count_days_between
+
+    assert count_days_between("2026-01-01", "2026-01-01") == 1
+    assert count_days_between("2026-01-01", "2026-01-03") == 3
+    assert count_days_between("2026-01-03", "2026-01-01") == 0
+
+
+def test_generate_date_range() -> None:
+    from famulix.clock import generate_date_range
+
+    dates = generate_date_range("2026-01-01", "2026-01-03")
+    assert dates == ["2026-01-01", "2026-01-02", "2026-01-03"]
+
+    dates = generate_date_range("2026-01-01", "2026-01-01")
+    assert dates == ["2026-01-01"]
