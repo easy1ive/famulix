@@ -378,3 +378,69 @@ def memory_timeline_markdown(
 def json_escape(data: object) -> str:
     """Deterministic JSON serialization for embedded data."""
     return json.dumps(data, sort_keys=True, ensure_ascii=False)
+
+
+def validate_report_sections(sections: list[ReportSection]) -> list[str]:
+    """Validate report sections for consistency.
+
+    Checks:
+    - All sections have non-empty titles
+    - All items have non-empty labels
+    - No duplicate section titles
+
+    Returns a list of validation problems found.
+    """
+    problems: list[str] = []
+    seen_titles: set[str] = set()
+
+    for i, section in enumerate(sections):
+        if not section.title or not section.title.strip():
+            problems.append(f"section[{i}] has empty title")
+        elif section.title in seen_titles:
+            problems.append(f"section[{i}] has duplicate title '{section.title}'")
+        else:
+            seen_titles.add(section.title)
+
+        for j, (label, _) in enumerate(section.items):
+            if not label or not label.strip():
+                problems.append(f"section[{i}].items[{j}] has empty label")
+
+    return problems
+
+
+def generate_comprehensive_report(
+    *,
+    title: str,
+    metadata: dict[str, str] | None = None,
+    memory_stats: dict[str, int] | None = None,
+    retrieval_stats: dict[str, float] | None = None,
+    consolidation_stats: dict[str, int] | None = None,
+    limitations: list[str] | None = None,
+) -> str:
+    """Generate a comprehensive Markdown report combining multiple data sources.
+
+    Returns a complete Markdown document with sections for each data source.
+    """
+    sections: list[ReportSection] = []
+
+    if metadata:
+        meta_items = [(k, v) for k, v in sorted(metadata.items())]
+        sections.append(ReportSection(title="Metadata", items=meta_items))
+
+    if memory_stats:
+        mem_items = [(k, str(v)) for k, v in sorted(memory_stats.items())]
+        sections.append(ReportSection(title="Memory Statistics", items=mem_items))
+
+    if retrieval_stats:
+        ret_items = [(k, f"{v:.6f}") for k, v in sorted(retrieval_stats.items())]
+        sections.append(ReportSection(title="Retrieval Performance", items=ret_items))
+
+    if consolidation_stats:
+        cons_items = [(k, str(v)) for k, v in sorted(consolidation_stats.items())]
+        sections.append(ReportSection(title="Consolidation Summary", items=cons_items))
+
+    if limitations:
+        lim_items = [(f"Issue {i + 1}", issue) for i, issue in enumerate(limitations)]
+        sections.append(ReportSection(title="Known Limitations", items=lim_items))
+
+    return render_markdown(title, sections)
