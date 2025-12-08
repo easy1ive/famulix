@@ -382,3 +382,57 @@ def test_execution_summary_formats_state() -> None:
     summary = execution_summary(state)
     assert isinstance(summary, dict)
     assert "steps_done" in summary or "step_count" in summary
+
+
+def test_execution_diagnostics_empty_state() -> None:
+    from famulix.executor import ExecutionState, execution_diagnostics
+
+    state = ExecutionState()
+    diag = execution_diagnostics(state)
+    assert "summary" in diag
+    assert "step_details" in diag
+    assert "budget_usage" in diag
+    assert "failure_details" in diag
+    assert diag["step_details"] == []
+    assert diag["failure_details"] == []
+
+
+def test_execution_diagnostics_with_history() -> None:
+    from famulix.executor import ExecutionState, StepExecution, execution_diagnostics
+
+    state = ExecutionState(steps_done=2, tokens_used=100, money_spent=2.5)
+    state.history = [
+        StepExecution(step_id="s1", success=True),
+        StepExecution(step_id="s2", success=False, error="tool failed"),
+    ]
+
+    diag = execution_diagnostics(state)
+    assert len(diag["step_details"]) == 2
+    assert diag["step_details"][0]["success"] is True
+    assert diag["step_details"][1]["success"] is False
+    assert len(diag["failure_details"]) == 1
+    assert diag["failure_details"][0]["step_id"] == "s2"
+
+
+def test_budget_monitoring_report_within_budget() -> None:
+    from famulix.executor import ExecutionBudget, ExecutionState, budget_monitoring_report
+
+    state = ExecutionState(steps_done=5, tokens_used=100, money_spent=10.0)
+    budget = ExecutionBudget(max_steps=100, max_tokens=1000, max_money=100.0)
+
+    report = budget_monitoring_report(state, budget)
+    assert report["within_all_budgets"] is True
+    assert report["step_usage"]["used"] == 5
+    assert report["step_usage"]["limit"] == 100
+    assert report["warnings"] == []
+
+
+def test_budget_monitoring_report_near_limit() -> None:
+    from famulix.executor import ExecutionBudget, ExecutionState, budget_monitoring_report
+
+    state = ExecutionState(steps_done=95, tokens_used=950, money_spent=95.0)
+    budget = ExecutionBudget(max_steps=100, max_tokens=1000, max_money=100.0)
+
+    report = budget_monitoring_report(state, budget)
+    assert len(report["warnings"]) >= 1
+    assert any("budget" in w.lower() for w in report["warnings"])

@@ -284,3 +284,95 @@ def execution_summary(state: ExecutionState) -> dict[str, Any]:
         "terminated": state.terminated,
         "termination_reason": state.termination_reason,
     }
+
+
+def execution_diagnostics(state: ExecutionState) -> dict[str, Any]:
+    """Generate detailed diagnostics for an execution run.
+
+    Returns a dict with:
+    - summary: basic execution summary
+    - step_details: per-step success/failure/timing
+    - budget_usage: budget consumption breakdown
+    - failure_details: detailed failure information
+    """
+    summary = execution_summary(state)
+
+    step_details: list[dict[str, Any]] = []
+    for step_result in state.history:
+        step_details.append(
+            {
+                "step_id": step_result.step_id,
+                "success": step_result.success,
+                "error": step_result.error,
+            }
+        )
+
+    budget_usage = {
+        "steps_executed": state.steps_done,
+        "tokens_used": state.tokens_used,
+        "money_spent": round(state.money_spent, 6),
+    }
+
+    failure_details: list[dict[str, Any]] = []
+    for step_result in state.history:
+        if not step_result.success:
+            failure_details.append(
+                {
+                    "step_id": step_result.step_id,
+                    "error": step_result.error,
+                }
+            )
+
+    return {
+        "summary": summary,
+        "step_details": step_details,
+        "budget_usage": budget_usage,
+        "failure_details": failure_details,
+    }
+
+
+def budget_monitoring_report(
+    state: ExecutionState,
+    budget: ExecutionBudget,
+) -> dict[str, Any]:
+    """Generate a budget monitoring report comparing usage to limits.
+
+    Returns a dict with:
+    - step_usage: steps used vs limit
+    - token_usage: tokens used vs limit
+    - money_usage: money spent vs limit
+    - within_all_budgets: whether all budgets are satisfied
+    - warnings: list of budget warnings
+    """
+    warnings: list[str] = []
+
+    step_pct = (state.steps_done / budget.max_steps * 100) if budget.max_steps > 0 else 0
+    token_pct = (state.tokens_used / budget.max_tokens * 100) if budget.max_tokens > 0 else 0
+    money_pct = (state.money_spent / budget.max_money * 100) if budget.max_money > 0 else 0
+
+    if step_pct >= 90:
+        warnings.append(f"Step budget {step_pct:.1f}% consumed")
+    if token_pct >= 90:
+        warnings.append(f"Token budget {token_pct:.1f}% consumed")
+    if money_pct >= 90:
+        warnings.append(f"Money budget {money_pct:.1f}% consumed")
+
+    return {
+        "step_usage": {
+            "used": state.steps_done,
+            "limit": budget.max_steps,
+            "percent": round(step_pct, 2),
+        },
+        "token_usage": {
+            "used": state.tokens_used,
+            "limit": budget.max_tokens,
+            "percent": round(token_pct, 2),
+        },
+        "money_usage": {
+            "used": round(state.money_spent, 6),
+            "limit": budget.max_money,
+            "percent": round(money_pct, 2),
+        },
+        "within_all_budgets": state.within_budget(budget),
+        "warnings": warnings,
+    }
