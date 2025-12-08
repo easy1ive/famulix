@@ -260,3 +260,62 @@ def test_render_limitations_empty_returns_empty() -> None:
     from famulix.reports import render_limitations
 
     assert render_limitations([]) == ""
+
+
+def test_validate_report_sections_valid() -> None:
+    from famulix.reports import ReportSection, validate_report_sections
+
+    sections = [
+        ReportSection(title="Section A", items=[("label1", "value1")]),
+        ReportSection(title="Section B", items=[("label2", "value2")]),
+    ]
+    problems = validate_report_sections(sections)
+    assert problems == []
+
+
+def test_validate_report_sections_empty() -> None:
+    from famulix.reports import validate_report_sections
+
+    problems = validate_report_sections([])
+    assert problems == []
+
+
+def test_validate_report_sections_detects_problems() -> None:
+    from famulix.reports import ReportSection, validate_report_sections
+
+    sections = [
+        ReportSection(title="", items=[("label", "value")]),
+        ReportSection(title="Duplicate", items=[("", "value")]),
+        ReportSection(title="Duplicate", items=[("label", "value")]),
+    ]
+    problems = validate_report_sections(sections)
+    assert len(problems) >= 3
+    assert any("empty title" in p for p in problems)
+    assert any("duplicate" in p for p in problems)
+    assert any("empty label" in p for p in problems)
+
+
+def test_generate_comprehensive_report_empty() -> None:
+    from famulix.reports import generate_comprehensive_report
+
+    report = generate_comprehensive_report(title="Empty Report")
+    assert "# Empty Report" in report
+
+
+def test_generate_comprehensive_report_with_data() -> None:
+    from famulix.reports import generate_comprehensive_report
+
+    report = generate_comprehensive_report(
+        title="Test Report",
+        metadata={"version": "1.0", "date": "2026-01-01"},
+        memory_stats={"total": 100, "active": 80},
+        retrieval_stats={"recall": 0.95, "precision": 0.88},
+        consolidation_stats={"merged": 5, "superseded": 2},
+        limitations=["Synthetic data only"],
+    )
+    assert "# Test Report" in report
+    assert "## Metadata" in report
+    assert "## Memory Statistics" in report
+    assert "## Retrieval Performance" in report
+    assert "## Consolidation Summary" in report
+    assert "## Known Limitations" in report
