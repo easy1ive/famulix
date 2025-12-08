@@ -133,3 +133,81 @@ def test_truncate_string_preserves_short_text() -> None:
     short_text = "hello"
     result = truncate_string(short_text, max_len=50)
     assert result == short_text
+
+
+def test_validate_non_empty_string_valid() -> None:
+    from famulix.utils import validate_non_empty_string
+
+    problems = validate_non_empty_string("hello", "field")
+    assert problems == []
+
+
+def test_validate_non_empty_string_invalid() -> None:
+    from famulix.utils import validate_non_empty_string
+
+    problems = validate_non_empty_string("", "field")
+    assert len(problems) == 1
+    assert "non-empty" in problems[0]
+
+    problems = validate_non_empty_string(123, "field")  # type: ignore
+    assert len(problems) == 1
+    assert "string" in problems[0]
+
+
+def test_validate_positive_int_valid() -> None:
+    from famulix.utils import validate_positive_int
+
+    problems = validate_positive_int(42, "count")
+    assert problems == []
+
+
+def test_validate_positive_int_invalid() -> None:
+    from famulix.utils import validate_positive_int
+
+    problems = validate_positive_int(0, "count")
+    assert len(problems) == 1
+    assert "positive" in problems[0]
+
+    problems = validate_positive_int("not_int", "count")  # type: ignore
+    assert len(problems) == 1
+    assert "integer" in problems[0]
+
+
+def test_validate_finite_float_valid() -> None:
+    from famulix.utils import validate_finite_float
+
+    problems = validate_finite_float(3.14, "score")
+    assert problems == []
+
+
+def test_validate_finite_float_invalid() -> None:
+    from famulix.utils import validate_finite_float
+
+    problems = validate_finite_float(float("inf"), "score")
+    assert len(problems) == 1
+    assert "finite" in problems[0]
+
+
+def test_normalize_whitespace() -> None:
+    from famulix.utils import normalize_whitespace
+
+    result = normalize_whitespace("  hello   world  \n\t test  ")
+    assert result == "hello world test"
+
+
+def test_safe_int() -> None:
+    from famulix.utils import safe_int
+
+    assert safe_int(42) == 42
+    assert safe_int("123") == 123
+    assert safe_int("invalid", default=0) == 0
+    assert safe_int(None, default=10) == 10
+
+
+def test_safe_float() -> None:
+    from famulix.utils import safe_float
+
+    assert safe_float(3.14) == 3.14
+    assert safe_float("2.5") == 2.5
+    assert safe_float("invalid", default=0.0) == 0.0
+    assert safe_float(None, default=1.0) == 1.0
