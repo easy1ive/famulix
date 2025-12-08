@@ -136,11 +136,14 @@ class ApprovalQueue:
 
     def average_decision_time(self) -> float:
         """Compute average time from creation to decision for decided requests."""
-        decided = [r for r in self.requests if r.decided_at_s is not None and r.created_at_s > 0]
-        if not decided:
+        durations: list[int] = []
+        for r in self.requests:
+            if r.decided_at_s is not None and r.created_at_s > 0:
+                durations.append(r.decided_at_s - r.created_at_s)
+        if not durations:
             return 0.0
-        total = sum(r.decided_at_s - r.created_at_s for r in decided)  # type: ignore[operator]
-        return round(total / len(decided), 6)
+        total = sum(durations)
+        return round(total / len(durations), 6)
 
     def add_escalation_chain(self, action: str, approvers: list[str]) -> None:
         """Register an escalation chain for an action type.

@@ -271,7 +271,11 @@ def trigger_statistics(log: TriggerLog) -> dict[str, object]:
     by_action = log.action_summary()
     unique_memories = len({e["memory_id"] for e in entries})
 
-    timestamps = [e["timestamp_s"] for e in entries]
+    timestamps: list[int] = []
+    for e in entries:
+        ts = e["timestamp_s"]
+        assert isinstance(ts, int)
+        timestamps.append(ts)
     time_span = max(timestamps) - min(timestamps) if len(timestamps) >= 2 else 0
 
     return {

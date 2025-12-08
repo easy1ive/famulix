@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -59,7 +59,7 @@ def _migrate_v2_to_v3(cur: sqlite3.Cursor) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_event_log_inserted ON event_log(inserted_at_s)")
 
 
-MIGRATIONS: dict[tuple[int, int], object] = {
+MIGRATIONS: dict[tuple[int, int], Callable[[sqlite3.Cursor], None]] = {
     (1, 2): _migrate_v1_to_v2,
     (2, 3): _migrate_v2_to_v3,
 }

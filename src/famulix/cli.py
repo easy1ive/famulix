@@ -245,14 +245,16 @@ def cmd_recall(args: argparse.Namespace) -> int:
             "seed": args.seed,
             "days": args.days,
             "results": [
-                {
-                    "rank": i + 1,
-                    "node_id": r.node_id,
-                    "kind": graph.get_node(r.node_id).kind if graph.get_node(r.node_id) else None,
-                    "title": graph.get_node(r.node_id).title if graph.get_node(r.node_id) else None,
-                    "score": r.score,
-                    "citation": r.citation,
-                }
+                (
+                    lambda node: {
+                        "rank": i + 1,
+                        "node_id": r.node_id,
+                        "kind": node.kind if node else None,
+                        "title": node.title if node else None,
+                        "score": r.score,
+                        "citation": r.citation,
+                    }
+                )(graph.get_node(r.node_id))
                 for i, r in enumerate(top_results)
             ],
         }
