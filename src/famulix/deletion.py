@@ -214,7 +214,9 @@ def validate_deletion_integrity(graph: MemoryGraph) -> list[str]:
 
     for node in deleted_nodes:
         result = verify_deletion_cascade(graph, node.node_id)
-        for violation in result["violations"]:
+        result_violations = result["violations"]
+        assert isinstance(result_violations, list)
+        for violation in result_violations:
             violations.append(f"node {node.node_id}: {violation}")
 
     return violations
