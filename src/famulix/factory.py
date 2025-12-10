@@ -582,6 +582,28 @@ def generate_history(
     return factory.generate(start_date=start_date)
 
 
+GOLDEN_FIXTURES: dict[tuple[str, int, int, str], dict[str, object]] = {
+    ("alex", 42, 1, "2025-01-06"): {
+        "persona_id": "alex",
+        "seed": 42,
+        "days": 1,
+        "start_date": "2025-01-06",
+        "end_date": "2025-01-06",
+        "event_count": 11,
+        "by_type": {"feedback_tap": 5, "note": 6},
+        "planted_fact_count": 2,
+        "planted_contradiction_count": 1,
+        "planted_preference_count": 5,
+        "checksum": "5421cd094e11b6d5",
+    },
+}
+
+
+def golden_fixture_keys() -> list[tuple[str, int, int, str]]:
+    """Return the list of registered golden fixture keys."""
+    return sorted(GOLDEN_FIXTURES.keys())
+
+
 def list_personas() -> list[str]:
     """Return available persona ids."""
     return sorted(DEFAULT_PERSONAS.keys())
