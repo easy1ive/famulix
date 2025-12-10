@@ -390,6 +390,21 @@ def mmr_rerank(
     return selected_results
 
 
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_iso_date(value: str, field: str) -> None:
+    """Validate a YYYY-MM-DD date string; raise ValueError on bad format."""
+    if not _DATE_RE.match(value):
+        raise ValueError(f"{field} must be YYYY-MM-DD, got: {value!r}")
+    parts = value.split("-")
+    _year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+    if month < 1 or month > 12:
+        raise ValueError(f"{field} month out of range: {value!r}")
+    if day < 1 or day > 31:
+        raise ValueError(f"{field} day out of range: {value!r}")
+
+
 def parse_query(text: str) -> dict[str, object]:
     """Parse a query string for structured filters.
 
@@ -433,9 +448,13 @@ def parse_query(text: str) -> dict[str, object]:
         elif part.startswith("tag:"):
             tags.append(part[len("tag:") :])
         elif part.startswith("since:"):
-            since = part[len("since:") :]
+            value = part[len("since:") :]
+            _validate_iso_date(value, "since")
+            since = value
         elif part.startswith("until:"):
-            until = part[len("until:") :]
+            value = part[len("until:") :]
+            _validate_iso_date(value, "until")
+            until = value
         else:
             terms.append(part)
     if current_phrase:
@@ -513,6 +532,27 @@ def query_with_filters(
             if not any(term.lower() in text_lower for term in negated):
                 neg_filtered.append(result)
         results = neg_filtered
+
+    raw_since = parsed.get("since")
+    raw_until = parsed.get("until")
+    since_str = str(raw_since) if isinstance(raw_since, str) and raw_since else None
+    until_str = str(raw_until) if isinstance(raw_until, str) and raw_until else None
+    if since_str or until_str:
+        from famulix.clock import day_start_epoch
+
+        since_s = day_start_epoch(since_str, 0) if since_str else None
+        until_s = day_start_epoch(until_str, 0) + 86400 if until_str else None
+        window_filtered: list[RetrievalResult] = []
+        for result in results:
+            node = graph.get_node(result.node_id)
+            if node is None:
+                continue
+            if since_s is not None and node.created_at_s < since_s:
+                continue
+            if until_s is not None and node.created_at_s >= until_s:
+                continue
+            window_filtered.append(result)
+        results = window_filtered
 
     return results[:max_results]
 
