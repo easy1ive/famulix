@@ -337,3 +337,44 @@ def test_generate_history_different_seeds_differ() -> None:
     ids1 = {e.event_id for e in events1}
     ids2 = {e.event_id for e in events2}
     assert ids1 != ids2
+
+
+def test_golden_fixture_alex_seed42_day1() -> None:
+    """Verify the alex/seed=42/days=1 golden fixture matches actual output."""
+    from famulix.factory import GOLDEN_FIXTURES, generate_history
+
+    key = ("alex", 42, 1, "2025-01-06")
+    assert key in GOLDEN_FIXTURES
+    expected = GOLDEN_FIXTURES[key]
+
+    events, manifest = generate_history(persona_id="alex", seed=42, days=1, start_date="2025-01-06")
+    assert len(events) == expected["event_count"]
+    assert manifest.persona_id == expected["persona_id"]
+    assert manifest.seed == expected["seed"]
+    assert manifest.days == expected["days"]
+    assert manifest.start_date == expected["start_date"]
+    assert manifest.end_date == expected["end_date"]
+    assert manifest.event_count == expected["event_count"]
+    assert manifest.by_type == expected["by_type"]
+    assert manifest.planted_fact_count == expected["planted_fact_count"]
+    assert manifest.planted_contradiction_count == expected["planted_contradiction_count"]
+    assert manifest.planted_preference_count == expected["planted_preference_count"]
+    assert manifest.checksum == expected["checksum"]
+
+
+def test_golden_fixture_keys_sorted_and_deterministic() -> None:
+    from famulix.factory import golden_fixture_keys
+
+    keys = golden_fixture_keys()
+    assert keys == sorted(keys)
+    assert len(keys) >= 1
+
+
+def test_golden_fixture_is_stable_across_runs() -> None:
+    """Generating the same fixture twice yields byte-identical events."""
+    from famulix.factory import generate_history
+
+    events_a, m_a = generate_history("alex", seed=42, days=1, start_date="2025-01-06")
+    events_b, m_b = generate_history("alex", seed=42, days=1, start_date="2025-01-06")
+    assert m_a.checksum == m_b.checksum
+    assert [e.event_id for e in events_a] == [e.event_id for e in events_b]
