@@ -550,6 +550,67 @@ def test_query_with_filters_applies_negation() -> None:
     assert all(r.node_id != n2.node_id for r in results)
 
 
+def test_query_with_filters_since_window() -> None:
+    from famulix.retrieval import BM25Index, query_with_filters
+
+    graph = MemoryGraph()
+    old = MemoryNode.create("fact", "old note", "ancient meeting notes", created_at_s=1000)
+    new = MemoryNode.create(
+        "fact", "new note", "recent meeting notes", created_at_s=86400 * 10 + 5000
+    )
+    graph.add_node(old)
+    graph.add_node(new)
+    index = BM25Index()
+    index.add_node(old)
+    index.add_node(new)
+    results = query_with_filters(
+        "meeting since:1970-01-10",
+        graph=graph,
+        index=index,
+        now_s=86400 * 20,
+    )
+    ids = {r.node_id for r in results}
+    assert new.node_id in ids
+    assert old.node_id not in ids
+
+
+def test_query_with_filters_until_window() -> None:
+    from famulix.retrieval import BM25Index, query_with_filters
+
+    graph = MemoryGraph()
+    old = MemoryNode.create("fact", "old note", "ancient meeting notes", created_at_s=1000)
+    new = MemoryNode.create(
+        "fact", "new note", "recent meeting notes", created_at_s=86400 * 10 + 5000
+    )
+    graph.add_node(old)
+    graph.add_node(new)
+    index = BM25Index()
+    index.add_node(old)
+    index.add_node(new)
+    results = query_with_filters(
+        "meeting until:1970-01-05",
+        graph=graph,
+        index=index,
+        now_s=86400 * 20,
+    )
+    ids = {r.node_id for r in results}
+    assert old.node_id in ids
+    assert new.node_id not in ids
+
+
+def test_parse_query_rejects_bad_since_format() -> None:
+    import pytest
+
+    from famulix.retrieval import parse_query
+
+    with pytest.raises(ValueError, match="since must be YYYY-MM-DD"):
+        parse_query("hello since:not-a-date")
+    with pytest.raises(ValueError, match="since month out of range"):
+        parse_query("hello since:2025-13-01")
+    with pytest.raises(ValueError, match="until day out of range"):
+        parse_query("hello until:2025-01-32")
+
+
 def test_bm25_digest_deterministic() -> None:
     from famulix.retrieval import BM25Index
 
