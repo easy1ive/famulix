@@ -623,3 +623,91 @@ def test_bm25_needs_rebuild_detects_stale_nodes() -> None:
     index.add("deleted-node", "old content")
 
     assert index.needs_rebuild(graph) is True
+
+
+def test_linear_reranker_reorders_by_weights() -> None:
+    """Linear reranker recombines component scores with custom weights."""
+    from famulix.retrieval import RetrievalResult, apply_reranker, make_linear_reranker
+
+    graph = MemoryGraph()
+    n1 = MemoryNode.create("fact", "alpha", "body one", created_at_s=100)
+    n2 = MemoryNode.create("fact", "beta", "body two", created_at_s=200)
+    graph.add_node(n1)
+    graph.add_node(n2)
+
+    results = [
+        RetrievalResult(
+            node_id=n1.node_id,
+            score=0.5,
+            citation="e1",
+            metadata={"bm25": 0.9, "recency": 0.1, "salience": 0.5},
+        ),
+        RetrievalResult(
+            node_id=n2.node_id,
+            score=0.6,
+            citation="e2",
+            metadata={"bm25": 0.1, "recency": 0.9, "salience": 0.5},
+        ),
+    ]
+
+    bm25_heavy = make_linear_reranker(bm25_weight=1.0, recency_weight=0.0, salience_weight=0.0)
+    bm25_ranked = apply_reranker(results, graph=graph, reranker=bm25_heavy)
+    assert [r.node_id for r in bm25_ranked] == [n1.node_id, n2.node_id]
+
+    recency_heavy = make_linear_reranker(bm25_weight=0.0, recency_weight=1.0, salience_weight=0.0)
+    recency_ranked = apply_reranker(results, graph=graph, reranker=recency_heavy)
+    assert [r.node_id for r in recency_ranked] == [n2.node_id, n1.node_id]
+
+
+def test_linear_reranker_is_deterministic_with_tiebreak() -> None:
+    from famulix.retrieval import RetrievalResult, make_linear_reranker
+
+    results = [
+        RetrievalResult(
+            node_id="n1",
+            score=0.5,
+            citation="e1",
+            metadata={"bm25": 0.3, "recency": 0.7, "salience": 0.4},
+        ),
+        RetrievalResult(
+            node_id="n2",
+            score=0.5,
+            citation="e2",
+            metadata={"bm25": 0.3, "recency": 0.7, "salience": 0.4},
+        ),
+    ]
+    graph = MemoryGraph()
+    r1 = make_linear_reranker()(list(results), graph)
+    r2 = make_linear_reranker()(list(results), graph)
+    assert [r.node_id for r in r1] == [r.node_id for r in r2]
+    assert r1[0].node_id == "n1"
+
+
+def test_apply_reranker_rejects_invented_node_ids() -> None:
+    import pytest
+
+    from famulix.retrieval import RetrievalResult, apply_reranker
+
+    graph = MemoryGraph()
+    n = MemoryNode.create("fact", "x", "y", created_at_s=100)
+    graph.add_node(n)
+
+    results = [RetrievalResult(node_id=n.node_id, score=1.0, citation="e1")]
+
+    def bad_reranker(rs: list[RetrievalResult], g: MemoryGraph) -> list[RetrievalResult]:
+        return [RetrievalResult(node_id="invented", score=1.0, citation="fake")]
+
+    with pytest.raises(ValueError, match="invented unknown result"):
+        apply_reranker(results, graph=graph, reranker=bad_reranker)
+
+
+@pytest.mark.model
+def test_torch_reranker_presence_matches_torch_availability() -> None:
+    from famulix.retrieval import make_torch_reranker
+    from famulix.salience_torch import is_torch_available
+
+    reranker = make_torch_reranker(seed=42)
+    if is_torch_available():
+        assert reranker is not None
+    else:
+        assert reranker is None

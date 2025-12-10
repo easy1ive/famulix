@@ -10,7 +10,7 @@ import json
 import math
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from famulix.memory_graph import MemoryGraph, MemoryNode
@@ -25,14 +25,20 @@ def tokenize(text: str) -> list[str]:
 
 @dataclass
 class RetrievalResult:
-    """A single retrieval hit with citation payload."""
+    """A single retrieval hit with citation payload and component metadata."""
 
     node_id: str
     score: float
     citation: str
+    metadata: dict[str, float] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
-        return {"node_id": self.node_id, "score": round(self.score, 6), "citation": self.citation}
+        return {
+            "node_id": self.node_id,
+            "score": round(self.score, 6),
+            "citation": self.citation,
+            "metadata": {k: round(v, 6) for k, v in self.metadata.items()},
+        }
 
 
 class BM25Index:
@@ -309,7 +315,14 @@ def hybrid_score(
         if result_node is None or not result_node.is_active:
             continue
         citation = f"[{result_node.kind}] {result_node.title}"
-        results.append(RetrievalResult(node_id=nid, score=score, citation=citation))
+        metadata = {
+            "bm25": round(bm25_norm.get(nid, 0.0), 6),
+            "recency": round(recency_norm.get(nid, 0.0), 6),
+            "salience": round(salience_norm.get(nid, 0.0), 6),
+        }
+        results.append(
+            RetrievalResult(node_id=nid, score=score, citation=citation, metadata=metadata)
+        )
     return results
 
 
@@ -536,3 +549,94 @@ def apply_reranker(
         seen.add(result.node_id)
         output.append(result)
     return output
+
+
+def make_linear_reranker(
+    *,
+    bm25_weight: float = 0.4,
+    recency_weight: float = 0.3,
+    salience_weight: float = 0.3,
+) -> Reranker:
+    """Build a scripted linear-combination reranker from component scores.
+
+    Each RetrievalResult carries component scores in its metadata when
+    produced by ``hybrid_score``. The reranker recombines them with the
+    given weights and sorts descending. This is a useful baseline against
+    learned rerankers.
+    """
+    weights = {
+        "bm25": bm25_weight,
+        "recency": recency_weight,
+        "salience": salience_weight,
+    }
+
+    def _rerank(results: list[RetrievalResult], graph: MemoryGraph) -> list[RetrievalResult]:
+        scored: list[tuple[float, RetrievalResult]] = []
+        for result in results:
+            total = 0.0
+            for key, w in weights.items():
+                component = result.metadata.get(key, 0.0)
+                total += w * float(component)
+            scored.append((round(total, 6), result))
+        scored.sort(key=lambda x: (-x[0], x[1].node_id))
+        return [
+            RetrievalResult(
+                node_id=r.node_id,
+                score=score,
+                citation=r.citation,
+                metadata=dict(r.metadata),
+            )
+            for score, r in scored
+        ]
+
+    return _rerank
+
+
+def make_torch_reranker(seed: int = 0) -> Reranker | None:
+    """Build a learned reranker using the torch rank-fusion MLP.
+
+    Returns ``None`` when PyTorch is not available so callers can fall
+    back to the linear baseline. The reranker expects each result's
+    metadata to contain ``bm25``, ``recency`` and ``salience`` keys, as
+    produced by ``hybrid_score``.
+    """
+    try:
+        from famulix.salience_torch import (
+            RankFusionMLP,
+            TorchRankFusionConfig,
+            is_torch_available,
+        )
+    except ImportError:
+        return None
+    if not is_torch_available():
+        return None
+    config = TorchRankFusionConfig(seed=seed)
+    model = RankFusionMLP(config)
+
+    def _rerank(results: list[RetrievalResult], graph: MemoryGraph) -> list[RetrievalResult]:
+        if not results:
+            return []
+        import numpy as np
+
+        feats: list[list[float]] = []
+        for result in results:
+            row = [
+                float(result.metadata.get("bm25", 0.0)),
+                float(result.metadata.get("recency", 0.0)),
+                float(result.metadata.get("salience", 0.0)),
+            ]
+            feats.append(row)
+        scores = model.predict_scores(np.array(feats, dtype=np.float32))
+        paired = [(round(float(s), 6), r) for s, r in zip(scores, results, strict=True)]
+        paired.sort(key=lambda x: (-x[0], x[1].node_id))
+        return [
+            RetrievalResult(
+                node_id=r.node_id,
+                score=score,
+                citation=r.citation,
+                metadata=dict(r.metadata, reranker="torch_rank_fusion"),
+            )
+            for score, r in paired
+        ]
+
+    return _rerank
