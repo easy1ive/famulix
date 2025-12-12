@@ -118,6 +118,46 @@ def test_render_markdown_contains_sections():
     assert "limitations" in md.lower()
 
 
+def test_briefing_to_dict_roundtrip():
+    from famulix.briefing import Briefing, BriefingItem
+
+    item = BriefingItem(
+        title="Test", body="body text", section="agenda", memory_ids=["mem_123"], priority=0.75
+    )
+    briefing = Briefing(
+        title="Daily test",
+        date_str="2026-01-15",
+        items=[item],
+        sections=["agenda"],
+        metadata={"version": "0.1.0"},
+        limitations=["test limitation"],
+    )
+    data = briefing.to_dict()
+    assert data["schema_version"] == 1
+    assert data["title"] == "Daily test"
+    assert data["item_count"] == 1
+    assert data["citation_count"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["title"] == "Test"
+    assert data["items"][0]["memory_ids"] == ["mem_123"]
+    assert data["limitations"] == ["test limitation"]
+
+
+def test_render_briefing_json_is_valid_and_deterministic():
+    import json
+
+    from famulix.briefing import render_briefing_json
+
+    g = _populate_graph()
+    briefing = build_briefing(g, date_str="2026-01-15", now_s=1200)
+    json_str = render_briefing_json(briefing)
+    data = json.loads(json_str)
+    assert data["schema_version"] == 1
+    assert data["date_str"] == "2026-01-15"
+    # Deterministic: same input → same output
+    assert render_briefing_json(briefing) == json_str
+
+
 def test_render_html_is_self_contained():
     g = _populate_graph()
     briefing = build_briefing(g, date_str="2026-01-15", now_s=1200)
