@@ -136,11 +136,45 @@ def test_remember_command(capsys):
     assert "Memory id" in captured.out
 
 
-def test_forget_command(capsys):
-    rc = main(["forget", "mem_test123"])
+def test_forget_command_missing_memory_returns_error(capsys):
+    rc = main(["forget", "mem_nonexistent_xyz"])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "not found" in captured.err
+
+
+def test_forget_command_deletes_real_memory(capsys):
+    from famulix.cli import _build_demo_graph
+
+    graph, _ = _build_demo_graph("alex", seed=7, days=7)
+    active_ids = [n.node_id for n in graph.all_nodes() if n.is_active]
+    assert active_ids
+
+    target_id = active_ids[0]
+    rc = main(["forget", target_id, "--seed", "7", "--days", "7"])
     assert rc == 0
     captured = capsys.readouterr()
-    assert "mem_test123" in captured.out
+    assert target_id in captured.out
+    assert "nodes removed" in captured.out
+    assert "cascade depth" in captured.out
+
+
+def test_forget_command_json_output(capsys):
+    import json
+
+    from famulix.cli import _build_demo_graph
+
+    graph, _ = _build_demo_graph("alex", seed=11, days=5)
+    active_ids = [n.node_id for n in graph.all_nodes() if n.is_active]
+    target_id = active_ids[0]
+
+    rc = main(["forget", target_id, "--seed", "11", "--days", "5", "--json"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["deleted"] == target_id
+    assert "audit" in data
+    assert isinstance(data["nodes_removed"], int)
 
 
 def test_privacy_detect_mode(capsys):
