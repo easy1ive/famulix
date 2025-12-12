@@ -17,6 +17,7 @@ from famulix.memory_graph import MemoryGraph
 from famulix.reports import (
     ReportSection,
     run_metadata,
+    svg_commitment_timeline,
     svg_day_ribbon,
     svg_heatmap,
 )
@@ -403,10 +404,11 @@ def render_briefing_html(
     # SVG charts
     svg_charts: list[str] = []
     if graph is not None:
+        from datetime import datetime, timedelta, timezone
+
         scores = score_all_nodes(graph, now_s=int(briefing.metadata.get("generated_at_s", "0")))
         hourly = [0.0] * 24
         daily: dict[str, list[float]] = {}
-        from datetime import datetime, timedelta, timezone
 
         for node in graph.all_nodes():
             if not node.is_active:
@@ -420,6 +422,15 @@ def render_briefing_html(
         heat_data = [daily[day] for day in days]
         if heat_data:
             svg_charts.append(svg_heatmap(heat_data, title="Memory salience by local day and hour"))
+
+        commitment_items = [it for it in briefing.items if it.section == "commitments"]
+        if commitment_items:
+            timeline_data: list[tuple[str, float, float]] = []
+            for idx, item in enumerate(commitment_items[:5]):
+                start_day = float(idx * 0.8)
+                duration = max(0.5, float(item.priority) * 1.5)
+                timeline_data.append((item.title[:20], start_day, duration))
+            svg_charts.append(svg_commitment_timeline(timeline_data))
 
     return render_htm(
         briefing.title,

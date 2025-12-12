@@ -129,6 +129,17 @@ def test_render_html_is_self_contained():
     assert "<svg" in html  # charts included
 
 
+def test_render_html_includes_commitment_timeline_when_goals_exist():
+    g = _populate_graph()
+    briefing = build_briefing(g, date_str="2026-01-15", now_s=1200)
+    html = render_briefing_html(briefing, graph=g)
+    svg_count = html.count("<svg")
+    assert svg_count >= 2  # at least day ribbon + one more
+    has_goal = any(it.section == "commitments" for it in briefing.items)
+    if has_goal:
+        assert svg_count >= 3  # day ribbon + heatmap + commitment timeline
+
+
 def test_render_html_escapes_hostile_text():
     g = MemoryGraph()
     node = MemoryNode.create(
