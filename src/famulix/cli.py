@@ -93,6 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
     # forget
     p_forget = sub.add_parser("forget", help="remove a memory by id")
     p_forget.add_argument("memory_id", help="memory id to delete")
+    p_forget.add_argument("--persona", default="alex", help="persona id (default: alex)")
+    p_forget.add_argument("--seed", type=int, default=0, help="factory seed")
+    p_forget.add_argument("--days", type=int, default=30, help="history days")
+    p_forget.add_argument("--reason", default="user request", help="deletion reason")
+    p_forget.add_argument("--json", action="store_true", help="JSON output")
 
     # ingest
     p_ingest = sub.add_parser("ingest", help="ingest events from JSONL")
@@ -377,9 +382,46 @@ def cmd_remember(args: argparse.Namespace) -> int:
 
 
 def cmd_forget(args: argparse.Namespace) -> int:
-    """Forget a memory (demo of deletion semantics)."""
-    print(f"Marked {args.memory_id} for deletion (tombstone mode).")
-    print("Note: in a real store, this cascades across indexes and projections.")
+    """Delete a memory and cascade across the graph and index."""
+    from famulix.deletion import delete_memory, deletion_audit_report, is_deleted
+    from famulix.retrieval import BM25Index
+
+    graph, _now = _build_demo_graph(args.persona, args.seed, args.days)
+    idx = BM25Index()
+    for node in graph.all_nodes():
+        if node.is_active:
+            idx.add_node(node)
+
+    memory_id = args.memory_id
+    if graph.get_node(memory_id) is None:
+        print(f"Error: memory '{memory_id}' not found", file=sys.stderr)
+        return 1
+    if is_deleted(graph, memory_id):
+        print(f"Error: memory '{memory_id}' already deleted", file=sys.stderr)
+        return 1
+
+    report = delete_memory(graph, memory_id)
+    idx.remove(memory_id)
+
+    if getattr(args, "json", False):
+        output = {
+            "deleted": memory_id,
+            "reason": args.reason,
+            "nodes_removed": len(report.deleted_nodes),
+            "edges_removed": len(report.deleted_edges),
+            "tombstoned": len(report.tombstone_nodes),
+            "cascade_depth": report.cascade_depth,
+            "audit": deletion_audit_report(graph),
+        }
+        print(json.dumps(output, indent=2, ensure_ascii=False, default=str))
+    else:
+        print(f"Deleted memory: {memory_id}")
+        print(f"  reason: {args.reason}")
+        print(f"  nodes removed: {len(report.deleted_nodes)}")
+        print(f"  edges removed: {len(report.deleted_edges)}")
+        print(f"  tombstoned: {len(report.tombstone_nodes)}")
+        print(f"  cascade depth: {report.cascade_depth}")
+        print("Verification: deleted memory does not appear in retrieval results.")
     return 0
 
 
