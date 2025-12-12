@@ -35,6 +35,15 @@ class BriefingItem:
     memory_ids: list[str] = field(default_factory=list)
     priority: float = 0.5
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "title": self.title,
+            "body": self.body,
+            "section": self.section,
+            "memory_ids": list(self.memory_ids),
+            "priority": round(self.priority, 6),
+        }
+
 
 @dataclass
 class Briefing:
@@ -60,6 +69,20 @@ class Briefing:
     @property
     def item_count(self) -> int:
         return len(self.items)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "title": self.title,
+            "date_str": self.date_str,
+            "item_count": self.item_count,
+            "citation_count": self.citation_count,
+            "sections": list(self.sections),
+            "section_counts": self.section_counts(),
+            "items": [item.to_dict() for item in self.items],
+            "metadata": dict(self.metadata),
+            "limitations": list(self.limitations),
+        }
 
     def section_counts(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -376,6 +399,13 @@ def render_briefing_markdown(briefing: Briefing) -> str:
     report_sections.append(ReportSection(title="limitations", items=lim_items))
 
     return render_md(briefing.title, report_sections, metadata=briefing.metadata)
+
+
+def render_briefing_json(briefing: Briefing) -> str:
+    """Render the briefing as a structured JSON string."""
+    import json
+
+    return json.dumps(briefing.to_dict(), indent=2, ensure_ascii=False, sort_keys=True)
 
 
 def render_briefing_html(
