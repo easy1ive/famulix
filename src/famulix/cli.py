@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_brief.add_argument("--budget", type=_positive_int, default=500, help="token budget")
     p_brief.add_argument("--output", help="output file (default: stdout)")
     p_brief.add_argument(
-        "--format", choices=["markdown", "html"], default="markdown", help="output format"
+        "--format", choices=["markdown", "html", "json"], default="markdown", help="output format"
     )
 
     # context
