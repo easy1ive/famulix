@@ -78,12 +78,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_ctx.add_argument("--seed", type=int, default=0, help="seed")
     p_ctx.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_ctx.add_argument("--budget", type=_positive_int, default=300, help="token budget")
+    p_ctx.add_argument("--json", action="store_true", help="output as JSON")
 
     # prefs
     p_prefs = sub.add_parser("prefs", help="view learned preferences")
     p_prefs.add_argument("--persona", default="alex", help="persona id")
     p_prefs.add_argument("--seed", type=int, default=0, help="seed")
     p_prefs.add_argument("--days", type=_positive_int, default=30, help="days of history")
+    p_prefs.add_argument("--json", action="store_true", help="output as JSON")
 
     # remember
     p_rem = sub.add_parser("remember", help="add a fact to memory")
@@ -113,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_trig.add_argument("--persona", default="alex", help="persona id")
     p_trig.add_argument("--seed", type=int, default=0, help="seed")
     p_trig.add_argument("--days", type=_positive_int, default=30, help="days of history")
+    p_trig.add_argument("--json", action="store_true", help="output as JSON")
 
     # privacy
     p_priv = sub.add_parser("privacy", help="privacy and redaction tools")
