@@ -520,3 +520,12 @@ class MemoryGraph:
                 added_edges += 1
 
         return added_nodes, added_edges
+
+    def summary(self) -> dict[str, Any]:
+        """Return a summary dict with key graph statistics."""
+        return {
+            "node_count": self.node_count(),
+            "edge_count": self.edge_count(),
+            "active_node_count": self.active_node_count(),
+            "kind_counts": self.kind_counts(),
+        }
