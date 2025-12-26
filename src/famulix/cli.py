@@ -131,6 +131,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_diff.add_argument("path_a", help="first session path")
     p_diff.add_argument("path_b", help="second session path")
 
+    # stats
+    p_stats = sub.add_parser("stats", help="show memory graph statistics")
+    p_stats.add_argument("--persona", default="alex", help="persona id")
+    p_stats.add_argument("--seed", type=int, default=0, help="seed")
+    p_stats.add_argument("--days", type=_positive_int, default=30, help="days of history")
+    p_stats.add_argument("--json", action="store_true", help="output as JSON")
+
     return parser
 
 
@@ -164,6 +171,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         "privacy": cmd_privacy,
         "replay": cmd_replay,
         "diff": cmd_diff,
+        "stats": cmd_stats,
     }
     handler = handlers.get(args.command)
     if handler is None:
@@ -519,6 +527,41 @@ def cmd_diff(args: argparse.Namespace) -> int:
         print(f"famulix diff: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(session_diff(left, right), indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_stats(args: argparse.Namespace) -> int:
+    """Show memory graph statistics."""
+    from famulix.encoding import encode_events_to_graph
+    from famulix.factory import generate_history_with_truth
+
+    events, manifest, _ = generate_history_with_truth(
+        persona_id=args.persona, seed=args.seed, days=args.days
+    )
+    graph = encode_events_to_graph(events)
+
+    stats = {
+        "persona_id": args.persona,
+        "seed": args.seed,
+        "days": args.days,
+        "event_count": len(events),
+        "node_count": graph.node_count(),
+        "edge_count": graph.edge_count(),
+        "kind_counts": graph.kind_counts(),
+    }
+
+    if args.json:
+        print(json.dumps(stats, indent=2, sort_keys=True))
+    else:
+        print(f"Persona: {stats['persona_id']}")
+        print(f"Seed: {stats['seed']}")
+        print(f"Days: {stats['days']}")
+        print(f"Events: {stats['event_count']}")
+        print(f"Nodes: {stats['node_count']}")
+        print(f"Edges: {stats['edge_count']}")
+        print("Node kinds:")
+        for kind, count in sorted(stats["kind_counts"].items()):
+            print(f"  {kind}: {count}")
     return 0
 
 
