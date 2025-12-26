@@ -401,6 +401,38 @@ def render_briefing_markdown(briefing: Briefing) -> str:
     return render_md(briefing.title, report_sections, metadata=briefing.metadata)
 
 
+def render_briefing_text(briefing: Briefing) -> str:
+    """Render the briefing as plain text (no markdown formatting)."""
+    lines: list[str] = [briefing.title, "=" * len(briefing.title), ""]
+
+    sections_by_name: dict[str, list[BriefingItem]] = {}
+    for item in briefing.items:
+        sections_by_name.setdefault(item.section, [])
+        sections_by_name[item.section].append(item)
+
+    for section_name in briefing.sections:
+        items = sections_by_name.get(section_name, [])
+        if items:
+            lines.append(section_name.upper())
+            lines.append("-" * len(section_name))
+            for item in items:
+                cites = ", ".join(item.memory_ids[:3])
+                lines.append(f"  {item.title}")
+                lines.append(f"    {item.body}")
+                lines.append(f"    [cited: {cites}]")
+            lines.append("")
+
+    # Limitations
+    if briefing.limitations:
+        lines.append("LIMITATIONS")
+        lines.append("-" * 11)
+        for lim in briefing.limitations:
+            lines.append(f"  - {lim}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def render_briefing_json(briefing: Briefing) -> str:
     """Render the briefing as a structured JSON string."""
     import json
