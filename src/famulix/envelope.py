@@ -171,3 +171,12 @@ def envelope_statistics(envelopes: list[Envelope]) -> dict[str, object]:
         "kinds": {e.kind for e in envelopes},
         "checksum_lengths": {len(e.checksum) for e in envelopes},
     }
+
+
+def envelope_summary(envelopes: list) -> dict[str, object]:
+    """Return summary statistics for a list of envelopes."""
+    return {
+        "count": len(envelopes),
+        "versions": list(set(e.schema_version for e in envelopes)) if envelopes else [],
+        "kinds": list(set(e.kind for e in envelopes)) if envelopes else [],
+    }
