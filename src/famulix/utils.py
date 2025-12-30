@@ -102,3 +102,20 @@ def safe_float(value: object, default: float = 0.0) -> float:
         except (ValueError, AttributeError):
             return default
     return default
+
+
+def truncate_text(text: str, max_length: int = 100) -> str:
+    """Truncate text to max length with ellipsis."""
+    if len(text) <= max_length:
+        return text
+    return text[: max_length - 3] + "..."
+
+
+def slugify(text: str) -> str:
+    """Convert text to URL-friendly slug."""
+    import re
+
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[-\s]+", "-", text)
+    return text
