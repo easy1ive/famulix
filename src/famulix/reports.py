@@ -444,3 +444,12 @@ def generate_comprehensive_report(
         sections.append(ReportSection(title="Known Limitations", items=lim_items))
 
     return render_markdown(title, sections)
+
+
+def report_metadata_summary(metadata: dict[str, str]) -> dict[str, object]:
+    """Return summary of report metadata."""
+    return {
+        "version": metadata.get("version", "unknown"),
+        "generated_at": metadata.get("generated_at", "unknown"),
+        "seed": metadata.get("seed", "unknown"),
+    }
