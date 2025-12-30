@@ -210,3 +210,23 @@ class EventLog:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+def eventlog_stats(log_path: str) -> dict[str, object]:
+    """Return statistics for an event log file."""
+    from pathlib import Path
+
+    path = Path(log_path)
+    if not path.exists():
+        return {"exists": False, "count": 0, "size_bytes": 0}
+
+    count = 0
+    with open(path) as f:
+        for _line in f:
+            count += 1
+
+    return {
+        "exists": True,
+        "count": count,
+        "size_bytes": path.stat().st_size,
+    }
