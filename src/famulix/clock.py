@@ -109,3 +109,20 @@ def generate_date_range(start_date: str, end_date: str) -> list[str]:
         dates.append(current.isoformat())
         current += timedelta(days=1)
     return dates
+
+
+def format_timestamp(ts: int, tz_offset_hours: int = 0) -> str:
+    """Format Unix timestamp as ISO 8601 string."""
+    from datetime import datetime, timedelta, timezone
+
+    tz = timezone(timedelta(hours=tz_offset_hours))
+    dt = datetime.fromtimestamp(ts, tz=tz)
+    return dt.isoformat()
+
+
+def parse_iso_date(date_str: str) -> int:
+    """Parse ISO date string to Unix timestamp."""
+    from datetime import datetime
+
+    dt = datetime.fromisoformat(date_str)
+    return int(dt.timestamp())
