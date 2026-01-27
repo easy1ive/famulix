@@ -680,3 +680,11 @@ def make_torch_reranker(seed: int = 0) -> Reranker | None:
         ]
 
     return _rerank
+
+
+def retrieval_index_stats(index: BM25Index) -> dict[str, object]:
+    """Return statistics for a retrieval index."""
+    return {
+        "doc_count": index.doc_count,
+        "term_count": index.term_count,
+    }
