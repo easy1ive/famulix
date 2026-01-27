@@ -322,3 +322,12 @@ def segment_unicode_words(text: str) -> list[str]:
         tokens.append("".join(current))
 
     return tokens
+
+
+def encoding_stats(graph) -> dict[str, object]:
+    """Return encoding statistics for a memory graph."""
+    return {
+        "episode_count": len(graph.nodes_by_kind("episode")),
+        "entity_count": len(graph.nodes_by_kind("entity")),
+        "fact_count": len(graph.nodes_by_kind("fact")),
+    }
