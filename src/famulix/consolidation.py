@@ -447,3 +447,12 @@ def consolidation_statistics(report: ConsolidationReport) -> dict[str, int]:
         "summary_nodes": len(report.summary_nodes),
         "total_changes": report.total_changes(),
     }
+
+
+def consolidation_report_summary(report) -> dict[str, object]:
+    """Return summary of consolidation report."""
+    return {
+        "merged_count": len(report.merged_pairs),
+        "superseded_count": len(report.superseded),
+        "contradictions_resolved": report.contradictions_resolved,
+    }
