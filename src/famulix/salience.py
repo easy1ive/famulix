@@ -217,3 +217,15 @@ def salience_report(
         "top_nodes": top_nodes,
         "score_distribution": distribution,
     }
+
+
+def salience_score_summary(scores: list[float]) -> dict[str, object]:
+    """Return summary statistics for salience scores."""
+    if not scores:
+        return {"count": 0, "mean": 0.0, "min": 0.0, "max": 0.0}
+    return {
+        "count": len(scores),
+        "mean": round(sum(scores) / len(scores), 6),
+        "min": round(min(scores), 6),
+        "max": round(max(scores), 6),
+    }
