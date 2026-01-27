@@ -286,3 +286,13 @@ def assemble_ordered_context(
     """
     ordered = order_context_items(items, strategy=order_strategy)
     return trim_to_budget(ordered, budget)
+
+
+def context_assembly_stats(result) -> dict[str, object]:
+    """Return statistics for a context assembly result."""
+    return {
+        "item_count": len(result.items),
+        "total_tokens": result.total_tokens,
+        "total_value": round(result.total_value, 6),
+        "within_budget": result.within_budget,
+    }
