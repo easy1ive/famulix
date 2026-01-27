@@ -272,3 +272,12 @@ def retention_diagnostics(
         "tier_counts": tier_counts,
         "protected_count": protected_count,
     }
+
+
+def decay_result_summary(result) -> dict[str, object]:
+    """Return summary of decay result."""
+    return {
+        "deactivated_count": result.deactivated_count,
+        "archived_count": result.archived_count,
+        "protected_count": result.protected_count,
+    }
