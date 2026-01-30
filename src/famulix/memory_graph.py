@@ -529,3 +529,19 @@ class MemoryGraph:
             "active_node_count": self.active_node_count(),
             "kind_counts": self.kind_counts(),
         }
+
+
+def export_graph_summary(graph: MemoryGraph) -> str:
+    """Export graph as a human-readable summary."""
+    lines = [
+        "Memory Graph Summary",
+        "====================",
+        f"Nodes: {graph.node_count()}",
+        f"Edges: {graph.edge_count()}",
+        f"Active nodes: {graph.active_node_count()}",
+        "",
+        "Node kinds:",
+    ]
+    for kind, count in sorted(graph.kind_counts().items()):
+        lines.append(f"  {kind}: {count}")
+    return "\n".join(lines)
