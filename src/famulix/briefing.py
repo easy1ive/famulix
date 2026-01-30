@@ -551,3 +551,13 @@ def build_briefing_from_connectors(
     if not briefing.citations_resolve(graph):
         raise RuntimeError("connector briefing contains an unresolved citation")
     return graph, briefing
+
+
+def briefing_stats(briefing: Briefing) -> dict[str, object]:
+    """Return statistics for a briefing."""
+    return {
+        "item_count": briefing.item_count,
+        "citation_count": briefing.citation_count,
+        "section_count": len(briefing.sections),
+        "limitation_count": len(briefing.limitations),
+    }
