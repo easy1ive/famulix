@@ -371,3 +371,13 @@ def run_full_evaluation(
     scorecard.slices["precision"] = precision
 
     return scorecard
+
+
+def evaluation_scorecard_summary(scorecard: dict) -> dict[str, object]:
+    """Return summary of evaluation scorecard."""
+    return {
+        "recall_at_5": scorecard.get("recall_at_5", 0.0),
+        "precision_at_5": scorecard.get("precision_at_5", 0.0),
+        "contradiction_accuracy": scorecard.get("contradiction_accuracy", 0.0),
+        "citation_coverage": scorecard.get("citation_coverage", 0.0),
+    }
