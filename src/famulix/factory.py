@@ -607,3 +607,13 @@ def golden_fixture_keys() -> list[tuple[str, int, int, str]]:
 def list_personas() -> list[str]:
     """Return available persona ids."""
     return sorted(DEFAULT_PERSONAS.keys())
+
+
+def factory_manifest_summary(manifest) -> dict[str, object]:
+    """Return summary of factory manifest."""
+    return {
+        "persona_id": manifest.persona_id,
+        "seed": manifest.seed,
+        "days": manifest.days,
+        "event_count": manifest.event_count,
+    }
