@@ -212,3 +212,12 @@ def event_statistics(events: list[Event]) -> dict[str, object]:
         "sources": {e.source for e in events},
         "timestamp_range": (min(timestamps), max(timestamps)),
     }
+
+
+def event_type_counts(events: list) -> dict[str, int]:
+    """Return counts of events by type."""
+    counts: dict[str, int] = {}
+    for event in events:
+        etype = event.event_type
+        counts[etype] = counts.get(etype, 0) + 1
+    return counts
