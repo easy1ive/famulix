@@ -31,3 +31,11 @@ release: build
 clean:
 	rm -rf build dist src/*.egg-info .pytest_cache .mypy_cache .ruff_cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
+.PHONY: examples
+examples: ## Run all examples
+	@echo "Running examples..."
+	@for ex in examples/*.py; do \
+		echo "Running $$ex..."; \
+		.venv/bin/python "$$ex" || true; \
+	done
