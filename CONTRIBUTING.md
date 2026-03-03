@@ -31,3 +31,12 @@ make typecheck     # mypy
 - Formatted with `ruff format`.
 - Type hints on all public functions.
 - Prefer dataclasses over dicts for structured data.
+
+## Adding Helper Functions
+
+When adding summary or statistics helpers:
+
+1. Return a dictionary with descriptive keys
+2. Use `round(x, 6)` for floating-point values
+3. Include tests for empty and populated inputs
+4. Document the helper in the module docstring
