@@ -83,3 +83,15 @@ The retrieval query parser supports quoted phrases for exact matching, negated t
 ## Policy conflict diagnostics
 
 The privacy policy engine provides detailed conflict diagnostics for rule pairs that could produce ambiguous decisions. Diagnostics include concrete overlap sets across actions, resources, and tiers, plus sample requests that both rules would match. Administrators can use these diagnostics to identify and resolve policy ambiguities before deployment.
+
+## Helper Functions
+
+Each module provides summary and statistics helpers for introspection:
+
+- `memory_graph.summary()` and `export_graph_summary()`
+- `retrieval_index_stats()`
+- `context_assembly_stats()`
+- `briefing_stats()`
+- `consolidation_report_summary()`
+
+These helpers return dictionaries suitable for JSON serialization and debugging.
