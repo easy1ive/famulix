@@ -14,3 +14,9 @@ This project is an offline framework for personal memory research. It does not
 connect to network services by default and does not ship with pretrained
 models. Security issues related to data handling, privacy semantics, or
 deletion correctness are in scope.
+
+## Privacy and Deletion
+
+Famulix implements right-to-forget semantics with cascade deletion across all data structures. Tombstones prevent re-derivation of deleted content.
+
+See `docs/privacy.md` for details on privacy tiers and PII handling.
