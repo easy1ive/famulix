@@ -426,3 +426,8 @@ def build_default_registry() -> ToolRegistry:
         add_tool,
     )
     return registry
+
+
+def tools_info() -> dict[str, object]:
+    """Return info about tools module."""
+    return {"module": "tools", "version": "0.1.2"}
