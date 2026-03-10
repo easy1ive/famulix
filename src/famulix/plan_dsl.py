@@ -401,3 +401,8 @@ def validate_step_type_compatibility(plan: Plan) -> list[str]:
                             )
 
     return errors
+
+
+def plan_dsl_info() -> dict[str, object]:
+    """Return info about plan_dsl module."""
+    return {"module": "plan_dsl", "version": "0.1.2"}
