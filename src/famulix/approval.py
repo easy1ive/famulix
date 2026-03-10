@@ -223,3 +223,8 @@ class ApprovalQueue:
             "escalation_chains": len(self.escalation_chains),
             "by_action": by_action,
         }
+
+
+def approval_info() -> dict[str, object]:
+    """Return info about approval module."""
+    return {"module": "approval", "version": "0.1.2"}
