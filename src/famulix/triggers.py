@@ -312,3 +312,8 @@ def validate_trigger_config(config: TriggerConfig) -> list[str]:
         problems.append(f"salience_threshold must be in [0, 1], got {config.salience_threshold}")
 
     return problems
+
+
+def triggers_info() -> dict[str, object]:
+    """Return info about triggers module."""
+    return {"module": "triggers", "version": "0.1.2"}
