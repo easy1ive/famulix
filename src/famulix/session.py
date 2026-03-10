@@ -249,3 +249,8 @@ def session_diff(a: SessionRecorder, b: SessionRecorder) -> dict[str, Any]:
         "first_difference": first_diff_index,
         "field_differences": field_diffs,
     }
+
+
+def session_info() -> dict[str, object]:
+    """Return info about session module."""
+    return {"module": "session", "version": "0.1.2"}
