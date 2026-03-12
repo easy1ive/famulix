@@ -551,3 +551,8 @@ def simulate_policy_requests(
         "ask_count": counts["ask"],
         "decisions": decisions,
     }
+
+
+def privacy_info() -> dict[str, object]:
+    """Return info about privacy module."""
+    return {"module": "privacy", "version": "0.1.2"}
