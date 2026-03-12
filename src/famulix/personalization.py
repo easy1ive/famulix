@@ -278,3 +278,8 @@ def compare_personalization_variants(
 def _number(value: object, default: float) -> float:
     """Read a numeric sort field without accepting arbitrary objects."""
     return float(value) if isinstance(value, (int, float)) else default
+
+
+def personalization_info() -> dict[str, object]:
+    """Return info about personalization module."""
+    return {"module": "personalization", "version": "0.1.2"}
