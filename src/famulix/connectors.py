@@ -253,3 +253,8 @@ def connector_hub_diagnostics(hub: ConnectorHub) -> dict[str, object]:
         "total_records": total_records,
         "per_source_counts": per_source,
     }
+
+
+def connectors_info() -> dict[str, object]:
+    """Return info about connectors module."""
+    return {"module": "connectors", "version": "0.1.2"}
