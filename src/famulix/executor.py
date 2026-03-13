@@ -376,3 +376,8 @@ def budget_monitoring_report(
         "within_all_budgets": state.within_budget(budget),
         "warnings": warnings,
     }
+
+
+def executor_info() -> dict[str, object]:
+    """Return info about executor module."""
+    return {"module": "executor", "version": "0.1.2"}
