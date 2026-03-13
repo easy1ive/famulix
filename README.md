@@ -36,3 +36,20 @@ famulix demo
 ## 许可证
 
 MIT
+
+## Helper Functions
+
+Famulix provides summary and statistics helpers across all modules:
+
+```python
+from famulix.memory_graph import export_graph_summary
+from famulix.retrieval import retrieval_index_stats
+from famulix.briefing import briefing_stats
+
+# Get graph summary
+print(export_graph_summary(graph))
+
+# Get index statistics
+stats = retrieval_index_stats(index)
+print(f"Documents: {stats['doc_count']}")
+```
