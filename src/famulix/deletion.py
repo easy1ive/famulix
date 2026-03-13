@@ -220,3 +220,8 @@ def validate_deletion_integrity(graph: MemoryGraph) -> list[str]:
             violations.append(f"node {node.node_id}: {violation}")
 
     return violations
+
+
+def deletion_info() -> dict[str, object]:
+    """Return info about deletion module."""
+    return {"module": "deletion", "version": "0.1.2"}
