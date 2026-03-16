@@ -63,3 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-11-12
 
 - Initial project bootstrap
+
+## [0.1.3] - 2026-11-12
+
+### Added
+- Module info helpers across all modules
+- Additional statistics and summary functions
+- Improved documentation coverage
+- GitHub infrastructure (templates, dependabot, code of conduct)
