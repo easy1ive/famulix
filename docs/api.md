@@ -18,3 +18,33 @@ The encoding module exposes `extract_fact_candidates` for text/confidence
 pairs and `extract_fact_candidate_spans` for the same candidates with source
 character offsets. `decode_fact_candidate(event, node)` reconstructs a span
 only when the node's provenance names that event and its offsets are valid.
+
+## Statistics and Summary Helpers
+
+### `memory_graph.export_graph_summary(graph) -> str`
+
+Export graph as human-readable summary with node/edge counts.
+
+### `retrieval.retrieval_index_stats(index) -> dict`
+
+Return index statistics (doc_count, term_count).
+
+### `context.context_assembly_stats(result) -> dict`
+
+Return assembly statistics (item_count, total_tokens, within_budget).
+
+### `briefing.briefing_stats(briefing) -> dict`
+
+Return briefing statistics (item_count, citation_count, section_count).
+
+### `evaluation.evaluation_scorecard_summary(scorecard) -> dict`
+
+Return scorecard summary (recall_at_5, precision_at_5, citation_coverage).
+
+### `factory.factory_manifest_summary(manifest) -> dict`
+
+Return manifest summary (persona_id, seed, days, event_count).
+
+### `events.event_type_counts(events) -> dict`
+
+Return counts of events by type.
