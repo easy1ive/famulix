@@ -138,6 +138,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_stats.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_stats.add_argument("--json", action="store_true", help="output as JSON")
 
+    # validate-session
+    p_validate = sub.add_parser("validate-session", help="validate a session recording file")
+    p_validate.add_argument("path", help="path to session JSONL file")
+    p_validate.add_argument("--json", action="store_true", help="output as JSON")
+
     return parser
 
 
@@ -172,6 +177,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         "replay": cmd_replay,
         "diff": cmd_diff,
         "stats": cmd_stats,
+        "validate-session": cmd_validate_session,
     }
     handler = handlers.get(args.command)
     if handler is None:
@@ -563,6 +569,36 @@ def cmd_stats(args: argparse.Namespace) -> int:
         for kind, count in sorted(stats["kind_counts"].items()):
             print(f"  {kind}: {count}")
     return 0
+
+
+def cmd_validate_session(args: argparse.Namespace) -> int:
+    """Validate a session recording file."""
+    from famulix.session import SessionRecorder, validate_session
+
+    try:
+        rec = SessionRecorder.load(args.path)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error loading session: {e}", file=sys.stderr)
+        return 1
+
+    report = validate_session(rec)
+
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print(f"Session ID: {rec.session_id}")
+        print(f"Valid: {report['valid']}")
+        print(f"Entries: {report['entry_count']}")
+        print(f"Checksum valid: {report['checksum_valid']}")
+        print(f"Timestamps monotonic: {report['timestamp_monotonic']}")
+        if report["errors"]:
+            print("Errors:")
+            for err in report["errors"]:
+                print(f"  - {err}")
+        else:
+            print("No errors found.")
+
+    return 0 if report["valid"] else 1
 
 
 if __name__ == "__main__":
