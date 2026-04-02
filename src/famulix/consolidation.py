@@ -456,3 +456,53 @@ def consolidation_report_summary(report) -> dict[str, object]:
         "superseded_count": len(report.superseded),
         "contradictions_resolved": report.contradictions_resolved,
     }
+
+
+def format_consolidation_report(report: ConsolidationReport, graph: MemoryGraph) -> str:
+    """Format a consolidation report as human-readable text with citations.
+
+    Returns a markdown-formatted string describing all consolidation actions
+    with references to the affected memory nodes.
+    """
+    lines: list[str] = []
+    lines.append("# Consolidation Report\n")
+    lines.append(f"- **Merged pairs**: {len(report.merged_pairs)}")
+    lines.append(f"- **Superseded**: {len(report.superseded)}")
+    lines.append(f"- **Summary nodes created**: {len(report.summary_nodes)}")
+    lines.append(f"- **Contradictions resolved**: {report.contradictions_resolved}")
+    lines.append("")
+
+    if report.merged_pairs:
+        lines.append("## Merged Near-Duplicates\n")
+        for i, (a, b, winner_id) in enumerate(report.merged_pairs[:10], 1):
+            winner = graph.get_node(winner_id)
+            if winner:
+                lines.append(f"{i}. **{winner.title}** (`{winner_id}`)")
+                lines.append(f"   - Merged from: `{a.node_id}` and `{b.node_id}`")
+        if len(report.merged_pairs) > 10:
+            lines.append(f"   ... and {len(report.merged_pairs) - 10} more")
+        lines.append("")
+
+    if report.superseded:
+        lines.append("## Superseded Memories\n")
+        for i, (old_id, new_id, reason) in enumerate(report.superseded[:10], 1):
+            new_node = graph.get_node(new_id)
+            if new_node:
+                lines.append(f"{i}. **{new_node.title}** (`{new_id}`)")
+                lines.append(f"   - Supersedes: `{old_id}`")
+                lines.append(f"   - Reason: {reason}")
+        if len(report.superseded) > 10:
+            lines.append(f"   ... and {len(report.superseded) - 10} more")
+        lines.append("")
+
+    if report.summary_nodes:
+        lines.append("## Episode Summaries Created\n")
+        for i, summary_id in enumerate(report.summary_nodes[:10], 1):
+            summary = graph.get_node(summary_id)
+            if summary:
+                lines.append(f"{i}. **{summary.title}** (`{summary_id}`)")
+        if len(report.summary_nodes) > 10:
+            lines.append(f"   ... and {len(report.summary_nodes) - 10} more")
+        lines.append("")
+
+    return "\n".join(lines)
