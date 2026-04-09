@@ -584,7 +584,7 @@ def generate_privacy_audit_report(
         if detected:
             texts_with_pii += 1
             for pii in detected:
-                pii_type = pii.get("type", "unknown")
+                pii_type = pii.pii_type
                 pii_types[pii_type] = pii_types.get(pii_type, 0) + 1
 
             redacted_text = redact_text(text, mode=redaction_mode)
