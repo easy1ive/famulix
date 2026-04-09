@@ -243,6 +243,46 @@ class ToolRegistry:
         self._idempotency_cache.clear()
         return count
 
+    def generate_catalog(self) -> str:
+        """Generate a human-readable catalog of all registered tools.
+
+        Returns a markdown-formatted string with tool descriptions,
+        parameters, and usage notes.
+        """
+        lines: list[str] = []
+        lines.append("# Tool Catalog\n")
+        lines.append(f"Total tools: {self.tool_count()}\n")
+
+        for spec in self.list_specs():
+            lines.append(f"## {spec.name}\n")
+            lines.append(f"{spec.description}\n")
+            lines.append(f"- **Side effects**: {spec.side_effect_class}")
+            lines.append(f"- **Timeout**: {spec.timeout_seconds}s")
+            lines.append(f"- **Max retries**: {spec.max_retries}")
+            if spec.idempotent:
+                lines.append("- **Idempotent**: yes")
+            if spec.capability_tags:
+                lines.append(f"- **Capabilities**: {', '.join(sorted(spec.capability_tags))}")
+
+            # Parameters
+            props = spec.parameters.get("properties", {})
+            required = spec.parameters.get("required", [])
+            if props:
+                lines.append("\n### Parameters\n")
+                for param_name, param_spec in sorted(props.items()):
+                    param_type = param_spec.get("type", "any")
+                    is_required = param_name in required
+                    req_marker = " (required)" if is_required else ""
+                    lines.append(f"- `{param_name}`: {param_type}{req_marker}")
+                    if "description" in param_spec:
+                        lines.append(f"  - {param_spec['description']}")
+                    if "enum" in param_spec:
+                        enum_vals = ", ".join(str(v) for v in param_spec["enum"])
+                        lines.append(f"  - Allowed values: {enum_vals}")
+            lines.append("")
+
+        return "\n".join(lines)
+
     def preflight(
         self,
         name: str,
