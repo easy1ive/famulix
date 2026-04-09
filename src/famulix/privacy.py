@@ -556,3 +556,46 @@ def simulate_policy_requests(
 def privacy_info() -> dict[str, object]:
     """Return info about privacy module."""
     return {"module": "privacy", "version": "0.1.2"}
+
+
+def generate_privacy_audit_report(
+    texts: list[str],
+    *,
+    redaction_mode: str = "reversible",
+) -> dict[str, object]:
+    """Generate a privacy audit report for a collection of texts.
+
+    Detects PII patterns, applies redaction, and returns statistics on
+    what was found and redacted.
+
+    Returns a dict with:
+    - total_texts: number of texts processed
+    - texts_with_pii: count of texts containing PII
+    - pii_types_found: dict of PII type -> count
+    - redacted_texts: list of redacted versions
+    - redaction_mode: the mode used
+    """
+    pii_types: dict[str, int] = {}
+    redacted: list[str] = []
+    texts_with_pii = 0
+
+    for text in texts:
+        detected = detect_pii(text)
+        if detected:
+            texts_with_pii += 1
+            for pii in detected:
+                pii_type = pii.get("type", "unknown")
+                pii_types[pii_type] = pii_types.get(pii_type, 0) + 1
+
+            redacted_text = redact_text(text, mode=redaction_mode)
+            redacted.append(redacted_text)
+        else:
+            redacted.append(text)
+
+    return {
+        "total_texts": len(texts),
+        "texts_with_pii": texts_with_pii,
+        "pii_types_found": pii_types,
+        "redacted_texts": redacted,
+        "redaction_mode": redaction_mode,
+    }
