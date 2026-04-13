@@ -381,3 +381,51 @@ def evaluation_scorecard_summary(scorecard: dict) -> dict[str, object]:
         "contradiction_accuracy": scorecard.get("contradiction_accuracy", 0.0),
         "citation_coverage": scorecard.get("citation_coverage", 0.0),
     }
+
+
+def format_evaluation_report(scorecard: dict, *, include_details: bool = True) -> str:
+    """Format an evaluation scorecard as human-readable markdown.
+
+    Returns a structured report with all evaluation metrics, per-slice
+    breakdowns, and an honest limitations section.
+    """
+    lines: list[str] = []
+    lines.append("# Evaluation Report\n")
+
+    # Overall scores
+    lines.append("## Overall Metrics\n")
+    lines.append(f"- **Recall@10**: {scorecard.get('recall_at_10', 0.0):.3f}")
+    lines.append(f"- **Precision@10**: {scorecard.get('precision_at_10', 0.0):.3f}")
+    lines.append(
+        f"- **Contradiction resolution**: {scorecard.get('contradiction_resolution', 0.0):.3f}"
+    )
+    lines.append(f"- **Citation coverage**: {scorecard.get('citation_coverage', 0.0):.3f}")
+    lines.append(f"- **Budget adherence**: {scorecard.get('budget_adherence', 0.0):.3f}")
+    lines.append(
+        f"- **Preference calibration (Brier)**: {scorecard.get('preference_brier', 0.0):.4f}"
+    )
+    deletion_violations = scorecard.get("deletion_resurrection_violations", 0)
+    lines.append(f"- **Deletion resurrection violations**: {deletion_violations}")
+    lines.append(f"- **Privacy violations**: {scorecard.get('privacy_violations', 0)}")
+    lines.append("")
+
+    # Per-slice breakdown
+    if include_details and "per_slice" in scorecard:
+        lines.append("## Per-Slice Breakdown\n")
+        for slice_name, metrics in scorecard["per_slice"].items():
+            lines.append(f"### {slice_name}\n")
+            for key, value in sorted(metrics.items()):
+                if isinstance(value, float):
+                    lines.append(f"- {key}: {value:.3f}")
+                else:
+                    lines.append(f"- {key}: {value}")
+            lines.append("")
+
+    # Limitations
+    lines.append("## Limitations\n")
+    lines.append("- All metrics computed on synthetic data with planted ground truth")
+    lines.append("- No real LLM or real user data involved")
+    lines.append("- Results reflect framework mechanics, not conversational ability")
+    lines.append("")
+
+    return "\n".join(lines)
