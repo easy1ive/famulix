@@ -87,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_prefs.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_prefs.add_argument("--json", action="store_true", help="output as JSON")
 
+    # prefs-report
+    p_prefs_report = sub.add_parser("prefs-report", help="generate preference profile report")
+    p_prefs_report.add_argument("--persona", default="alex", help="persona id")
+    p_prefs_report.add_argument("--seed", type=int, default=0, help="seed")
+    p_prefs_report.add_argument("--days", type=_positive_int, default=30, help="days of history")
+
     # remember
     p_rem = sub.add_parser("remember", help="add a fact to memory")
     p_rem.add_argument("title", help="fact title")
@@ -168,6 +174,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         "brief": cmd_brief,
         "context": cmd_context,
         "prefs": cmd_prefs,
+        "prefs-report": cmd_prefs_report,
         "remember": cmd_remember,
         "forget": cmd_forget,
         "ingest": cmd_ingest,
@@ -384,6 +391,30 @@ def cmd_prefs(args: argparse.Namespace) -> int:
     print(f"Learned preferences ({len(prefs)} keys):")
     for key, (value, conf) in sorted(prefs.items()):
         print(f"  {key}: {value} (confidence: {conf:.3f})")
+    return 0
+
+
+def cmd_prefs_report(args: argparse.Namespace) -> int:
+    """Generate a full preference profile report."""
+    from famulix.factory import generate_history_with_truth
+    from famulix.preferences import PreferenceProfile
+
+    _events, _manifest, truth = generate_history_with_truth(
+        persona_id=args.persona, seed=args.seed, days=args.days
+    )
+    profile = PreferenceProfile()
+    for idx, sig in enumerate(truth["preference_signals"]):
+        profile.add_feedback(
+            pref_key=sig["key"],
+            value=sig["value"],
+            signal=sig["rating"],
+            timestamp_s=idx * 3600,
+            confidence=0.6,
+            source="synthetic",
+        )
+    now_s = len(truth["preference_signals"]) * 3600
+    report = profile.generate_report(now_s)
+    print(report)
     return 0
 
 
