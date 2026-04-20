@@ -123,6 +123,36 @@ class PreferenceProfile:
     def entries_for_key(self, key: str) -> list[PreferenceEntry]:
         return [e for e in self.entries if e.pref_key == key]
 
+    def generate_report(self, now_s: int) -> str:
+        """Generate a human-readable preference profile report.
+
+        Returns a markdown-formatted string with current preferences,
+        entry counts, and confidence levels.
+        """
+        lines: list[str] = []
+        lines.append("# Preference Profile Report\n")
+        lines.append(f"- **Version**: {self.version}")
+        lines.append(f"- **Total entries**: {self.entry_count()}")
+        lines.append(f"- **Unique keys**: {len(self.preference_keys())}")
+        lines.append(f"- **Decay half-life**: {self.decay_half_life_s / 86400:.1f} days")
+        lines.append("")
+
+        current = self.current_preferences(now_s)
+        if current:
+            lines.append("## Current Preferences\n")
+            for key, (value, confidence) in sorted(current.items()):
+                lines.append(f"### {key}\n")
+                lines.append(f"- **Preferred value**: {value}")
+                lines.append(f"- **Confidence**: {confidence:.3f}")
+                entry_count = len(self.entries_for_key(key))
+                lines.append(f"- **Total entries**: {entry_count}")
+                lines.append("")
+        else:
+            lines.append("## Current Preferences\n")
+            lines.append("No preferences with sufficient confidence.\n")
+
+        return "\n".join(lines)
+
 
 def merge_profiles(*profiles: PreferenceProfile) -> PreferenceProfile:
     """Merge multiple preference profiles into one, sorted by timestamp."""
