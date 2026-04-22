@@ -378,6 +378,48 @@ def budget_monitoring_report(
     }
 
 
+def format_execution_report(state: ExecutionState) -> str:
+    """Generate a human-readable execution report in markdown format.
+
+    Returns a formatted string with execution summary, step details,
+    budget usage, and failure information.
+    """
+    lines: list[str] = []
+    lines.append("# Plan Execution Report\n")
+
+    # Summary
+    lines.append("## Summary\n")
+    summary = execution_summary(state)
+    lines.append(f"- **Steps completed**: {summary['steps_done']}")
+    lines.append(f"- **Successes**: {summary['successes']}")
+    lines.append(f"- **Failures**: {summary['failures']}")
+    lines.append(f"- **Tokens used**: {summary['tokens_used']}")
+    lines.append(f"- **Money spent**: ${summary['money_spent']:.4f}")
+    lines.append(f"- **Terminated**: {summary['terminated']}")
+    if summary["termination_reason"]:
+        lines.append(f"- **Termination reason**: {summary['termination_reason']}")
+    lines.append("")
+
+    # Step details
+    if state.history:
+        lines.append("## Step Details\n")
+        for step_result in state.history:
+            status = "✓" if step_result.success else "✗"
+            lines.append(f"### Step {step_result.step_id} {status}\n")
+            if step_result.error:
+                lines.append(f"**Error**: {step_result.error}\n")
+            lines.append("")
+
+    # Budget usage
+    lines.append("## Budget Usage\n")
+    lines.append(f"- **Steps executed**: {state.steps_done}")
+    lines.append(f"- **Tokens consumed**: {state.tokens_used}")
+    lines.append(f"- **Cost**: ${state.money_spent:.4f}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
 def executor_info() -> dict[str, object]:
     """Return info about executor module."""
     return {"module": "executor", "version": "0.1.2"}
