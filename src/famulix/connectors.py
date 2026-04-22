@@ -140,6 +140,42 @@ class ConnectorHub:
     def record_count(self) -> int:
         return len(self.records())
 
+    def health_report(self) -> dict[str, object]:
+        """Generate a health report for all connectors in the hub.
+
+        Returns a dict with:
+        - total_sources: number of connectors
+        - healthy_sources: sources that collected successfully
+        - failed_sources: sources that raised ConnectorError
+        - record_counts: dict of source -> record count
+        - errors: list of error messages for failed sources
+        """
+        healthy: list[str] = []
+        failed: list[str] = []
+        record_counts: dict[str, int] = {}
+        errors: list[str] = []
+
+        for connector in self.connectors:
+            try:
+                batch = connector.collect()
+                if not batch.verify():
+                    failed.append(connector.source)
+                    errors.append(f"{connector.source}: invalid batch checksum")
+                else:
+                    healthy.append(connector.source)
+                    record_counts[connector.source] = len(batch.records)
+            except ConnectorError as e:
+                failed.append(connector.source)
+                errors.append(f"{connector.source}: {e}")
+
+        return {
+            "total_sources": len(self.connectors),
+            "healthy_sources": len(healthy),
+            "failed_sources": len(failed),
+            "record_counts": record_counts,
+            "errors": errors,
+        }
+
     def to_events(self) -> list[Event]:
         """Convert normalized records to deterministic versioned events."""
         events: list[Event] = []
