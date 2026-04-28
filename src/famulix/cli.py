@@ -48,6 +48,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--seed", type=int, default=0, help="random seed")
     p_eval.add_argument("--days", type=_positive_int, default=90, help="days of history")
     p_eval.add_argument("--budget", type=_positive_int, default=500, help="token budget")
+
+    # exec-report
+    sub.add_parser("exec-report", help="generate plan execution report")
     p_eval.add_argument("--json", action="store_true", help="output as JSON")
 
     # recall
@@ -170,6 +173,7 @@ def _dispatch(args: argparse.Namespace) -> int:
     handlers: dict[str, Callable[[argparse.Namespace], int]] = {
         "demo": cmd_demo,
         "eval": cmd_eval,
+        "exec-report": cmd_exec_report,
         "recall": cmd_recall,
         "brief": cmd_brief,
         "context": cmd_context,
@@ -251,6 +255,25 @@ def cmd_eval(args: argparse.Namespace) -> int:
             if key in ("persona_id", "seed", "days", "slices"):
                 continue
             print(f"  {key}: {val}")
+    return 0
+
+
+def cmd_exec_report(args: argparse.Namespace) -> int:
+    """Generate a plan execution report from a demo run."""
+    from famulix.executor import ExecutionState, StepExecution, format_execution_report
+
+    # Create a demo execution state
+    state = ExecutionState()
+    state.history.append(StepExecution(step_id="ingest", success=True))
+    state.history.append(StepExecution(step_id="consolidate", success=True))
+    state.history.append(StepExecution(step_id="recall", success=True))
+    state.history.append(StepExecution(step_id="brief", success=True))
+    state.steps_done = 4
+    state.tokens_used = 1200
+    state.money_spent = 0.05
+
+    report = format_execution_report(state)
+    print(report)
     return 0
 
 
