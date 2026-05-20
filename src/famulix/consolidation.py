@@ -312,39 +312,47 @@ def consolidate_graph(
         report.merged_pairs.append((survivor.node_id, obsolete.node_id))
         seen.add(obsolete.node_id)
 
-    # Step 2: contradictions
-    contradictions = find_contradictions(graph)
-    resolved_keys: set[str] = set()
-    for a, b in contradictions:
-        key = _fact_key(a)
-        if key in resolved_keys:
-            continue
-        node_a = graph.get_node(a.node_id)
-        node_b = graph.get_node(b.node_id)
-        if node_a is None or node_b is None:
-            continue
-        if not node_a.is_active or not node_b.is_active:
-            continue
-        newer, older = sorted(
-            (node_a, node_b), key=lambda node: (node.created_at_s, node.node_id), reverse=True
-        )
-        newer_trusted = node_a.metadata.get("trust") in {"high", "verified"}
-        older_trusted = node_b.metadata.get("trust") in {"high", "verified"}
-        if newer.node_id == node_b.node_id:
-            newer_trusted, older_trusted = older_trusted, newer_trusted
-        winner = resolve_contradiction(
-            newer, older, newer_trusted=newer_trusted, older_trusted=older_trusted
-        )
-        loser = node_b if winner.node_id == node_a.node_id else node_a
-        # Mark loser superseded
-        from dataclasses import replace
+    # Step 2: contradictions - loop until no more are found
+    max_iterations = 10  # Safety limit
+    for _iteration in range(max_iterations):
+        contradictions = find_contradictions(graph)
+        if not contradictions:
+            break
+        resolved_keys: set[str] = set()
+        resolved_any = False
+        for a, b in contradictions:
+            key = _fact_key(a)
+            if key in resolved_keys:
+                continue
+            node_a = graph.get_node(a.node_id)
+            node_b = graph.get_node(b.node_id)
+            if node_a is None or node_b is None:
+                continue
+            if not node_a.is_active or not node_b.is_active:
+                continue
+            newer, older = sorted(
+                (node_a, node_b), key=lambda node: (node.created_at_s, node.node_id), reverse=True
+            )
+            newer_trusted = node_a.metadata.get("trust") in {"high", "verified"}
+            older_trusted = node_b.metadata.get("trust") in {"high", "verified"}
+            if newer.node_id == node_b.node_id:
+                newer_trusted, older_trusted = older_trusted, newer_trusted
+            winner = resolve_contradiction(
+                newer, older, newer_trusted=newer_trusted, older_trusted=older_trusted
+            )
+            loser = node_b if winner.node_id == node_a.node_id else node_a
+            # Mark loser superseded
+            from dataclasses import replace
 
-        graph._nodes[loser.node_id] = replace(loser, is_active=False)  # noqa: SLF001
-        graph.add_edge(MemoryEdge.create(winner.node_id, loser.node_id, "supersedes"))
-        graph.add_edge(MemoryEdge.create(winner.node_id, loser.node_id, "contradicts"))
-        report.superseded.append(loser.node_id)
-        report.contradictions_resolved += 1
-        resolved_keys.add(key)
+            graph._nodes[loser.node_id] = replace(loser, is_active=False)  # noqa: SLF001
+            graph.add_edge(MemoryEdge.create(winner.node_id, loser.node_id, "supersedes"))
+            graph.add_edge(MemoryEdge.create(winner.node_id, loser.node_id, "contradicts"))
+            report.superseded.append(loser.node_id)
+            report.contradictions_resolved += 1
+            resolved_keys.add(key)
+            resolved_any = True
+        if not resolved_any:
+            break
 
     return report
 
