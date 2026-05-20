@@ -72,10 +72,10 @@ def test_pipeline_consolidate_retrieve_brief():
         assert edge.from_id in all_ids
         assert edge.to_id in all_ids
 
-    # Consolidation makes progress (second run has fewer or equal changes)
-    report1 = consolidate_graph(graph)
+    # Consolidation is idempotent (second run finds nothing new)
+    consolidate_graph(graph)
     report2 = consolidate_graph(graph)
-    assert report2.total_changes() <= report1.total_changes()
+    assert report2.total_changes() == 0
 
     # No dangling edges after consolidation
     all_ids_after = {n.node_id for n in graph.all_nodes()}
