@@ -136,16 +136,32 @@ def eval_recall_precision(
     now_s: int,
     k_values: list[int] | None = None,
 ) -> tuple[dict[str, float], dict[str, float]]:
-    """Evaluate retrieval recall@k and precision@k for planted facts."""
+    """Evaluate retrieval recall@k and precision@k for planted facts.
+
+    planted_fact_ids may be event_ids (mapped via source_event metadata) or
+    node_ids (used directly if present in the graph).
+    """
     if k_values is None:
         k_values = [1, 5, 10, 20]
+
+    # Map planted event_ids to fact node_ids via source_event metadata
+    # Also accept node_ids directly if they exist in the graph
+    planted_node_ids: set[str] = set()
+    for node in graph.all_nodes():
+        if node.kind == "fact":
+            source_event = node.metadata.get("source_event", "")
+            if source_event in planted_fact_ids:
+                planted_node_ids.add(node.node_id)
+            if node.node_id in planted_fact_ids:
+                planted_node_ids.add(node.node_id)
+
     idx = _build_index(graph)
     results = hybrid_score("fact memory recall test", graph=graph, index=idx, now_s=now_s)
     retrieved_ids = [r.node_id for r in results]
     recall: dict[str, float] = {}
     precision: dict[str, float] = {}
     for k in k_values:
-        r, p = compute_recall_precision(retrieved_ids, planted_fact_ids, k)
+        r, p = compute_recall_precision(retrieved_ids, planted_node_ids, k)
         recall[f"@{k}"] = r
         precision[f"@{k}"] = p
     return recall, precision
@@ -158,14 +174,27 @@ def eval_contradiction_resolution(
     """Evaluate contradiction resolution accuracy.
 
     For each pair (old_id, new_id), the newer fact should be the active one
-    after consolidation. Returns fraction of correctly resolved pairs.
+    after consolidation. IDs may be event_ids (mapped via source_event metadata)
+    or node_ids (used directly). Returns fraction of correctly resolved pairs.
     """
     if not contradiction_pairs:
         return 1.0
+
+    # Build event_id -> node_id mapping for fact nodes
+    event_to_node: dict[str, str] = {}
+    for node in graph.all_nodes():
+        if node.kind == "fact":
+            source_event = node.metadata.get("source_event", "")
+            if source_event:
+                event_to_node[source_event] = node.node_id
+
     correct = 0
     for old_id, new_id in contradiction_pairs:
-        new_node = graph.get_node(new_id)
-        old_node = graph.get_node(old_id)
+        # Try event_id mapping first, fall back to direct node_id
+        resolved_old = event_to_node.get(old_id, old_id)
+        resolved_new = event_to_node.get(new_id, new_id)
+        new_node = graph.get_node(resolved_new)
+        old_node = graph.get_node(resolved_old)
         # After consolidation, the newer should be active, older superseded
         new_active = new_node.is_active if new_node else False
         old_active = old_node.is_active if old_node else True
@@ -174,11 +203,11 @@ def eval_contradiction_resolution(
         elif new_active and old_active:
             # Both still active but new is "newer verified" - partial credit
             # Check if there's a supersedes edge
-            supersedes_edges = graph.out_edges(new_id)
+            supersedes_edges = graph.out_edges(resolved_new)
             has_supersede = any(e.kind == "supersedes" for e in supersedes_edges)
             if has_supersede:
                 correct += 1
-    return round(correct / len(contradiction_pairs), 6)
+    return round(correct / max(len(contradiction_pairs), 1), 6)
 
 
 def eval_citation_coverage(
