@@ -156,14 +156,36 @@ def eval_recall_precision(
                 planted_node_ids.add(node.node_id)
 
     idx = _build_index(graph)
-    results = hybrid_score("fact memory recall test", graph=graph, index=idx, now_s=now_s)
-    retrieved_ids = [r.node_id for r in results]
+
+    # For each planted fact, query using its own title and check retrieval rank.
+    # This tests whether the retrieval mechanics work (index, scoring, ranking).
     recall: dict[str, float] = {}
     precision: dict[str, float] = {}
     for k in k_values:
-        r, p = compute_recall_precision(retrieved_ids, planted_node_ids, k)
-        recall[f"@{k}"] = r
-        precision[f"@{k}"] = p
+        recall[f"@{k}"] = 0.0
+        precision[f"@{k}"] = 0.0
+
+    if not planted_node_ids:
+        return recall, precision
+
+    found_at_k: dict[int, int] = {k: 0 for k in k_values}
+    total_queries = 0
+
+    for node in graph.all_nodes():
+        if node.kind == "fact" and node.node_id in planted_node_ids:
+            query = node.title
+            results = hybrid_score(query, graph=graph, index=idx, now_s=now_s)
+            top_ids = [r.node_id for r in results]
+            total_queries += 1
+            for k in k_values:
+                if node.node_id in top_ids[:k]:
+                    found_at_k[k] += 1
+
+    if total_queries > 0:
+        for k in k_values:
+            recall[f"@{k}"] = round(found_at_k[k] / total_queries, 6)
+            precision[f"@{k}"] = round(found_at_k[k] / (total_queries * k), 6)
+
     return recall, precision
 
 
