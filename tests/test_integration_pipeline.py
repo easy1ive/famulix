@@ -1,8 +1,12 @@
 """Integration test: full pipeline from history generation to briefing."""
 
 from famulix.briefing import build_briefing, render_briefing_markdown
+from famulix.consolidation import consolidate_graph
+from famulix.context import ContextItem, assemble_context, estimate_tokens
 from famulix.encoding import encode_events_to_graph
+from famulix.evaluation import eval_contradiction_resolution, eval_recall_precision
 from famulix.factory import generate_history_with_truth
+from famulix.retrieval import BM25Index, hybrid_score
 
 
 def test_full_pipeline_history_to_brief():
@@ -52,3 +56,86 @@ def test_pipeline_graph_encoding():
     # All nodes should be retrievable
     all_nodes = graph.all_nodes()
     assert len(all_nodes) == graph.node_count()
+
+
+def test_pipeline_consolidate_retrieve_brief():
+    """Consolidate → retrieve → brief with invariant checks at each stage."""
+    events, manifest, truth = generate_history_with_truth(
+        persona_id="alex", seed=99, days=30, start_date="2026-03-01"
+    )
+    graph = encode_events_to_graph(events)
+    assert graph.node_count() > 0
+
+    # No dangling edges after encoding
+    all_ids = {n.node_id for n in graph.all_nodes()}
+    for edge in graph.all_edges():
+        assert edge.from_id in all_ids
+        assert edge.to_id in all_ids
+
+    # Consolidation makes progress (second run has fewer or equal changes)
+    report1 = consolidate_graph(graph)
+    report2 = consolidate_graph(graph)
+    assert report2.total_changes() <= report1.total_changes()
+
+    # No dangling edges after consolidation
+    all_ids_after = {n.node_id for n in graph.all_nodes()}
+    for edge in graph.all_edges():
+        assert edge.from_id in all_ids_after
+        assert edge.to_id in all_ids_after
+
+    # Retrieval returns valid citations
+    idx = BM25Index()
+    for node in graph.all_nodes():
+        if node.is_active:
+            idx.add_node(node)
+    now_s = events[-1].timestamp_s + 3600
+    results = hybrid_score("address phone schedule", graph=graph, index=idx, now_s=now_s)
+    for r in results[:10]:
+        assert graph.get_node(r.node_id) is not None
+
+    # Briefing cites existing nodes
+    briefing = build_briefing(graph, date_str=manifest.end_date, now_s=now_s, seed=99)
+    for item in briefing.items:
+        for mid in item.memory_ids:
+            assert graph.get_node(mid) is not None
+
+    # Context assembly respects budget
+    ctx_items = [
+        ContextItem(
+            item_id=r.node_id,
+            token_estimate=estimate_tokens(r.citation),
+            value=r.score,
+            payload=r.citation,
+        )
+        for r in results[:20]
+    ]
+    ctx = assemble_context(ctx_items, budget=200)
+    assert ctx.total_tokens <= 200
+
+
+def test_pipeline_planted_fact_recovery():
+    """Evaluation harness recovers planted facts through the full pipeline."""
+    events, _manifest, truth = generate_history_with_truth(
+        persona_id="alex", seed=7, days=45, start_date="2026-02-01"
+    )
+    graph = encode_events_to_graph(events)
+    consolidate_graph(graph)
+    now_s = events[-1].timestamp_s + 3600
+
+    planted_fact_set = set(truth["fact_ids"])
+    recall, precision = eval_recall_precision(graph, planted_fact_set, now_s)
+    assert recall["@5"] >= 0.5
+    assert precision["@5"] > 0.0
+
+
+def test_pipeline_contradiction_resolution():
+    """Contradiction resolution works end-to-end."""
+    events, _manifest, truth = generate_history_with_truth(
+        persona_id="alex", seed=42, days=60, start_date="2026-01-01"
+    )
+    graph = encode_events_to_graph(events)
+    consolidate_graph(graph)
+
+    pairs = [(p[0], p[1]) for p in truth["contradiction_pairs"]]
+    accuracy = eval_contradiction_resolution(graph, pairs)
+    assert accuracy >= 0.5
