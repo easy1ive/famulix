@@ -288,7 +288,7 @@ def assemble_ordered_context(
     return trim_to_budget(ordered, budget)
 
 
-def context_assembly_stats(result) -> dict[str, object]:
+def context_assembly_stats(result: AssemblyResult) -> dict[str, object]:
     """Return statistics for a context assembly result."""
     return {
         "item_count": len(result.items),

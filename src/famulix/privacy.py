@@ -561,7 +561,7 @@ def privacy_info() -> dict[str, object]:
 def generate_privacy_audit_report(
     texts: list[str],
     *,
-    redaction_mode: str = "reversible",
+    redaction_mode: RedactionMode = "reversible",
 ) -> dict[str, object]:
     """Generate a privacy audit report for a collection of texts.
 
@@ -587,7 +587,7 @@ def generate_privacy_audit_report(
                 pii_type = pii.pii_type
                 pii_types[pii_type] = pii_types.get(pii_type, 0) + 1
 
-            redacted_text = redact_text(text, mode=redaction_mode)
+            redacted_text, _mapping = redact_text(text, mode=redaction_mode)
             redacted.append(redacted_text)
         else:
             redacted.append(text)

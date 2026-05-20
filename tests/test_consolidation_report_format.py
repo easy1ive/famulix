@@ -41,7 +41,7 @@ def test_format_consolidation_report_with_merges():
     n1, n2 = nodes[0], nodes[1]
 
     report = ConsolidationReport(
-        merged_pairs=[(n1, n2, n1.node_id)],
+        merged_pairs=[(n1.node_id, n2.node_id)],
         superseded=[],
         summary_nodes=[],
         contradictions_resolved=0,

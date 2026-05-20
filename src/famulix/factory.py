@@ -609,7 +609,7 @@ def list_personas() -> list[str]:
     return sorted(DEFAULT_PERSONAS.keys())
 
 
-def factory_manifest_summary(manifest) -> dict[str, object]:
+def factory_manifest_summary(manifest: HistoryManifest) -> dict[str, object]:
     """Return summary of factory manifest."""
     return {
         "persona_id": manifest.persona_id,

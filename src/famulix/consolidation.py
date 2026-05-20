@@ -449,7 +449,7 @@ def consolidation_statistics(report: ConsolidationReport) -> dict[str, int]:
     }
 
 
-def consolidation_report_summary(report) -> dict[str, object]:
+def consolidation_report_summary(report: ConsolidationReport) -> dict[str, object]:
     """Return summary of consolidation report."""
     return {
         "merged_count": len(report.merged_pairs),
@@ -474,23 +474,23 @@ def format_consolidation_report(report: ConsolidationReport, graph: MemoryGraph)
 
     if report.merged_pairs:
         lines.append("## Merged Near-Duplicates\n")
-        for i, (a, b, winner_id) in enumerate(report.merged_pairs[:10], 1):
+        for i, (winner_id, loser_id) in enumerate(report.merged_pairs[:10], 1):
             winner = graph.get_node(winner_id)
             if winner:
                 lines.append(f"{i}. **{winner.title}** (`{winner_id}`)")
-                lines.append(f"   - Merged from: `{a.node_id}` and `{b.node_id}`")
+                lines.append(f"   - Merged with: `{loser_id}`")
         if len(report.merged_pairs) > 10:
             lines.append(f"   ... and {len(report.merged_pairs) - 10} more")
         lines.append("")
 
     if report.superseded:
         lines.append("## Superseded Memories\n")
-        for i, (old_id, new_id, reason) in enumerate(report.superseded[:10], 1):
-            new_node = graph.get_node(new_id)
-            if new_node:
-                lines.append(f"{i}. **{new_node.title}** (`{new_id}`)")
-                lines.append(f"   - Supersedes: `{old_id}`")
-                lines.append(f"   - Reason: {reason}")
+        for i, node_id in enumerate(report.superseded[:10], 1):
+            node = graph.get_node(node_id)
+            if node:
+                lines.append(f"{i}. **{node.title}** (`{node_id}`)")
+            else:
+                lines.append(f"{i}. `{node_id}`")
         if len(report.superseded) > 10:
             lines.append(f"   ... and {len(report.superseded) - 10} more")
         lines.append("")

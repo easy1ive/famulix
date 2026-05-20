@@ -30,14 +30,17 @@ class RetrievalResult:
     node_id: str
     score: float
     citation: str
-    metadata: dict[str, float] = field(default_factory=dict)
+    metadata: dict[str, float | str] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
+        meta_out: dict[str, object] = {}
+        for k, v in self.metadata.items():
+            meta_out[k] = round(v, 6) if isinstance(v, float) else v
         return {
             "node_id": self.node_id,
             "score": round(self.score, 6),
             "citation": self.citation,
-            "metadata": {k: round(v, 6) for k, v in self.metadata.items()},
+            "metadata": meta_out,
         }
 
 
@@ -315,7 +318,7 @@ def hybrid_score(
         if result_node is None or not result_node.is_active:
             continue
         citation = f"[{result_node.kind}] {result_node.title}"
-        metadata = {
+        metadata: dict[str, float | str] = {
             "bm25": round(bm25_norm.get(nid, 0.0), 6),
             "recency": round(recency_norm.get(nid, 0.0), 6),
             "salience": round(salience_norm.get(nid, 0.0), 6),
@@ -656,7 +659,6 @@ def make_torch_reranker(seed: int = 0) -> Reranker | None:
     def _rerank(results: list[RetrievalResult], graph: MemoryGraph) -> list[RetrievalResult]:
         if not results:
             return []
-        import numpy as np
 
         feats: list[list[float]] = []
         for result in results:
@@ -666,7 +668,7 @@ def make_torch_reranker(seed: int = 0) -> Reranker | None:
                 float(result.metadata.get("salience", 0.0)),
             ]
             feats.append(row)
-        scores = model.predict_scores(np.array(feats, dtype=np.float32))
+        scores = model.score_rows(feats)
         paired = [(round(float(s), 6), r) for s, r in zip(scores, results, strict=True)]
         paired.sort(key=lambda x: (-x[0], x[1].node_id))
         return [
@@ -674,7 +676,7 @@ def make_torch_reranker(seed: int = 0) -> Reranker | None:
                 node_id=r.node_id,
                 score=score,
                 citation=r.citation,
-                metadata=dict(r.metadata, reranker="torch_rank_fusion"),
+                metadata={**r.metadata, "reranker": "torch_rank_fusion"},
             )
             for score, r in paired
         ]
