@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-11-12
+
+### Fixed
+- Consolidation is now truly idempotent (loops until stable)
+- Evaluation maps planted event_ids to fact node_ids correctly
+- Per-fact query retrieval instead of single generic query
+- Mypy type errors resolved across six modules
+
+### Added
+- Integration tests for full consolidate-retrieve-brief pipeline
+- Integration tests for privacy redaction and deletion cascade
+- Integration tests for session replay and preference learning
+- Integration tests for approval queue and plan DSL validation
+- Memory graph architecture documentation
+- Retrieval and context assembly guide
+- Detailed evaluation harness documentation
+
 ## [0.1.3] - 2026-11-12
 
 ### Added
