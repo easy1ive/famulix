@@ -80,6 +80,18 @@ class Event:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Event:
+        """Reconstruct an Event from its dict representation."""
+        return cls(
+            event_id=data["event_id"],
+            event_type=data["event_type"],
+            timestamp_s=int(data["timestamp_s"]),
+            source=data["source"],
+            data=data["data"],
+            version=int(data.get("version", 1)),
+        )
+
 
 def note_event(timestamp_s: int, source: str, text: str) -> Event:
     """Build a note event."""
