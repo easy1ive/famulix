@@ -480,3 +480,31 @@ def format_evaluation_report(scorecard: dict, *, include_details: bool = True) -
     lines.append("")
 
     return "\n".join(lines)
+
+
+def compute_per_slice_scorecard(
+    results: list[dict[str, float | str]],
+) -> dict[str, dict[str, float]]:
+    """Compute per-slice scorecard from evaluation results."""
+    if not results:
+        return {}
+
+    slices: dict[str, list[dict]] = {}
+    for r in results:
+        slice_name = r["slice"]
+        if slice_name not in slices:
+            slices[slice_name] = []
+        slices[slice_name].append(r)
+
+    scorecard = {}
+    for slice_name, slice_results in slices.items():
+        recalls = [r["recall"] for r in slice_results]
+        precisions = [r["precision"] for r in slice_results]
+
+        scorecard[slice_name] = {
+            "avg_recall": round(sum(recalls) / len(recalls), 6),
+            "avg_precision": round(sum(precisions) / len(precisions), 6),
+            "count": len(slice_results),
+        }
+
+    return scorecard
