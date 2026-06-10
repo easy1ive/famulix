@@ -561,3 +561,12 @@ def briefing_stats(briefing: Briefing) -> dict[str, object]:
         "section_count": len(briefing.sections),
         "limitation_count": len(briefing.limitations),
     }
+
+
+def embed_run_metadata(version: str, seed: int, config_hash: str) -> dict[str, str | int]:
+    """Embed run metadata in briefing for reproducibility."""
+    return {
+        "version": version,
+        "seed": seed,
+        "config_hash": config_hash,
+    }
