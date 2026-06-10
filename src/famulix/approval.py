@@ -228,3 +228,33 @@ class ApprovalQueue:
 def approval_info() -> dict[str, object]:
     """Return info about approval module."""
     return {"module": "approval", "version": "0.1.2"}
+
+
+def compute_approval_metrics(decisions: list[dict]) -> dict[str, float | int]:
+    """Compute metrics from approval decisions."""
+    if not decisions:
+        return {
+            "total": 0,
+            "approved": 0,
+            "denied": 0,
+            "expired": 0,
+            "avg_latency_s": 0.0,
+            "min_latency_s": 0,
+            "max_latency_s": 0,
+        }
+
+    approved = sum(1 for d in decisions if d.get("approved"))
+    denied = sum(1 for d in decisions if d.get("approved") is False and not d.get("expired"))
+    expired = sum(1 for d in decisions if d.get("expired"))
+
+    latencies = [d["latency_s"] for d in decisions if "latency_s" in d]
+
+    return {
+        "total": len(decisions),
+        "approved": approved,
+        "denied": denied,
+        "expired": expired,
+        "avg_latency_s": round(sum(latencies) / len(latencies), 6) if latencies else 0.0,
+        "min_latency_s": min(latencies) if latencies else 0,
+        "max_latency_s": max(latencies) if latencies else 0,
+    }
