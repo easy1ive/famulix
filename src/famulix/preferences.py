@@ -284,3 +284,33 @@ def calibration_report(
         "positive_rate": round(float(outcomes_arr.mean()), 6),
         "mean_prediction": round(float(predictions_arr.mean()), 6),
     }
+
+
+def compute_reliability_bins(
+    predictions: list[tuple[float, bool]], n_bins: int = 10
+) -> list[dict[str, float]]:
+    """Compute reliability diagram bins for calibration."""
+    if not predictions:
+        return []
+
+    bins: list[list[tuple[float, bool]]] = [[] for _ in range(n_bins)]
+
+    for conf, correct in predictions:
+        bin_idx = min(int(conf * n_bins), n_bins - 1)
+        bins[bin_idx].append((conf, correct))
+
+    result = []
+    for bin_data in bins:
+        if not bin_data:
+            continue
+        avg_conf = sum(c for c, _ in bin_data) / len(bin_data)
+        accuracy = sum(1 for _, c in bin_data if c) / len(bin_data)
+        result.append(
+            {
+                "confidence": round(avg_conf, 6),
+                "accuracy": round(accuracy, 6),
+                "count": len(bin_data),
+            }
+        )
+
+    return result
