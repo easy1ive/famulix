@@ -317,3 +317,11 @@ def validate_trigger_config(config: TriggerConfig) -> list[str]:
 def triggers_info() -> dict[str, object]:
     """Return info about triggers module."""
     return {"module": "triggers", "version": "0.1.2"}
+
+
+def is_quiet_hours(hour: int, quiet_start: int = 22, quiet_end: int = 8) -> bool:
+    """Check if an hour falls within quiet hours."""
+    if quiet_start > quiet_end:
+        return hour >= quiet_start or hour < quiet_end
+    else:
+        return quiet_start <= hour < quiet_end
