@@ -514,3 +514,11 @@ def format_consolidation_report(report: ConsolidationReport, graph: MemoryGraph)
         lines.append("")
 
     return "\n".join(lines)
+
+
+def extract_fact_key(text: str) -> str:
+    """Extract a canonical key from fact text for contradiction detection."""
+    stop_words = {"the", "a", "an", "is", "are", "was", "were", "my", "i", "at", "in", "on"}
+    words = text.lower().split()
+    content_words = [w for w in words if w not in stop_words and len(w) > 2]
+    return " ".join(sorted(content_words[:5]))
