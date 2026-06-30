@@ -508,3 +508,18 @@ def compute_per_slice_scorecard(
         }
 
     return scorecard
+
+
+def count_privacy_violations(results: list[dict[str, str]]) -> int:
+    """Count privacy tier violations."""
+    tier_order = {"public": 0, "private": 1, "confidential": 2}
+
+    violations = 0
+    for r in results:
+        data_tier = tier_order.get(r.get("tier", "public"), 0)
+        accessor_tier = tier_order.get(r.get("accessed_by", "public"), 0)
+
+        if accessor_tier < data_tier:
+            violations += 1
+
+    return violations
