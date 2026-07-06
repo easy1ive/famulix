@@ -255,7 +255,10 @@ def test_consolidation_report_matches_across_insertion_orders() -> None:
         graph = MemoryGraph()
         for node in order:
             graph.add_node(node)
-        reports.append(consolidate_graph(graph).to_dict())
+        d = consolidate_graph(graph).to_dict()
+        # elapsed_seconds is a timing metric, not part of deterministic output
+        d.pop("elapsed_seconds", None)
+        reports.append(d)
     assert reports[0] == reports[1]
     assert reports[0]["total_changes"] > 0
 
