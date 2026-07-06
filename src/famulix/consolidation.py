@@ -14,6 +14,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from time import perf_counter
 
 from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
 
@@ -26,6 +27,7 @@ class ConsolidationReport:
     superseded: list[str] = field(default_factory=list)
     contradictions_resolved: int = 0
     summary_nodes: list[str] = field(default_factory=list)
+    elapsed_seconds: float = 0.0
 
     def total_changes(self) -> int:
         return len(self.merged_pairs) + len(self.superseded) + len(self.summary_nodes)
@@ -41,6 +43,7 @@ class ConsolidationReport:
             "contradictions_resolved": self.contradictions_resolved,
             "summary_nodes": list(self.summary_nodes),
             "total_changes": self.total_changes(),
+            "elapsed_seconds": round(self.elapsed_seconds, 6),
         }
 
     def to_markdown(self) -> str:
@@ -53,6 +56,8 @@ class ConsolidationReport:
         lines: list[str] = ["# Consolidation Report", ""]
         lines.append(f"**Total changes:** {self.total_changes()}")
         lines.append(f"**Contradictions resolved:** {self.contradictions_resolved}")
+        if self.elapsed_seconds > 0:
+            lines.append(f"**Elapsed:** {self.elapsed_seconds:.3f}s")
         lines.append("")
 
         if self.merged_pairs:
@@ -292,6 +297,7 @@ def consolidate_graph(
     2. Detect and resolve contradictions among fact nodes.
     3. (Skips summary generation for now — added separately.)
     """
+    start = perf_counter()
     report = ConsolidationReport()
 
     # Step 1: dedup
@@ -354,6 +360,7 @@ def consolidate_graph(
         if not resolved_any:
             break
 
+    report.elapsed_seconds = perf_counter() - start
     return report
 
 
