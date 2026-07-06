@@ -331,3 +331,14 @@ def encoding_stats(graph: MemoryGraph) -> dict[str, object]:
         "entity_count": len(graph.nodes_by_kind("entity")),
         "fact_count": len(graph.nodes_by_kind("fact")),
     }
+
+
+def configure_session_segmentation(
+    max_gap_seconds: int = 3600,
+    min_events_per_session: int = 1,
+) -> dict[str, int]:
+    """Configure session segmentation parameters."""
+    return {
+        "max_gap_seconds": max_gap_seconds,
+        "min_events_per_session": min_events_per_session,
+    }
