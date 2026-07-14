@@ -61,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_recall.add_argument("--days", type=_positive_int, default=30, help="days for demo graph")
     p_recall.add_argument("-k", type=_positive_int, default=10, help="top-k results")
     p_recall.add_argument("--json", action="store_true", help="output as JSON")
+    p_recall.add_argument(
+        "--diverse",
+        action="store_true",
+        help="apply MMR diversity reranking (lambda=0.7)",
+    )
 
     # brief
     p_brief = sub.add_parser("brief", help="generate a daily briefing")
@@ -279,7 +284,7 @@ def cmd_exec_report(args: argparse.Namespace) -> int:
 
 def cmd_recall(args: argparse.Namespace) -> int:
     """Run a recall query against a demo graph."""
-    from famulix.retrieval import BM25Index, hybrid_score
+    from famulix.retrieval import BM25Index, hybrid_score, mmr_rerank
 
     graph, now_s = _build_demo_graph(args.persona, args.seed, args.days)
     idx = BM25Index()
@@ -288,6 +293,13 @@ def cmd_recall(args: argparse.Namespace) -> int:
             idx.add_node(node)
     query = args.query or "important facts"
     results = hybrid_score(query, graph=graph, index=idx, now_s=now_s)
+
+    # Apply MMR diversity reranking if requested
+    if getattr(args, "diverse", False):
+        # Fetch more candidates for MMR to choose from
+        candidates = results[: args.k * 3]
+        results = mmr_rerank(candidates, graph=graph, top_k=args.k, lambda_param=0.7)
+
     top_results = results[: args.k]
 
     if getattr(args, "json", False):
