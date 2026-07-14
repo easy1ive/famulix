@@ -66,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="apply MMR diversity reranking (lambda=0.7)",
     )
+    p_recall.add_argument(
+        "--rebuild-index",
+        action="store_true",
+        help="rebuild BM25 index from graph before search",
+    )
 
     # brief
     p_brief = sub.add_parser("brief", help="generate a daily briefing")
@@ -288,9 +293,15 @@ def cmd_recall(args: argparse.Namespace) -> int:
 
     graph, now_s = _build_demo_graph(args.persona, args.seed, args.days)
     idx = BM25Index()
-    for node in graph.all_nodes():
-        if node.is_active:
-            idx.add_node(node)
+
+    # Rebuild index if requested or if stale
+    if getattr(args, "rebuild_index", False) or idx.needs_rebuild(graph):
+        idx.rebuild_from_graph(graph)
+    else:
+        for node in graph.all_nodes():
+            if node.is_active:
+                idx.add_node(node)
+
     query = args.query or "important facts"
     results = hybrid_score(query, graph=graph, index=idx, now_s=now_s)
 
