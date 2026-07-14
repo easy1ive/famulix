@@ -139,3 +139,62 @@ def test_pipeline_contradiction_resolution():
     pairs = [(p[0], p[1]) for p in truth["contradiction_pairs"]]
     accuracy = eval_contradiction_resolution(graph, pairs)
     assert accuracy >= 0.5
+
+
+def test_pipeline_mmr_diversity_reranking():
+    """MMR diversity reranking integrates with retrieval pipeline."""
+    from famulix.retrieval import mmr_rerank
+
+    events, _manifest, truth = generate_history_with_truth(
+        persona_id="alex", seed=55, days=21, start_date="2026-04-01"
+    )
+    graph = encode_events_to_graph(events)
+    consolidate_graph(graph)
+
+    idx = BM25Index()
+    for node in graph.all_nodes():
+        if node.is_active:
+            idx.add_node(node)
+
+    now_s = events[-1].timestamp_s + 3600
+    results = hybrid_score("meeting schedule address", graph=graph, index=idx, now_s=now_s)
+
+    # Apply MMR reranking
+    diverse_results = mmr_rerank(results, graph=graph, top_k=5, lambda_param=0.7)
+
+    # Should return requested number of results
+    assert len(diverse_results) <= 5
+    # All results should have valid node references
+    for r in diverse_results:
+        assert graph.get_node(r.node_id) is not None
+
+
+def test_pipeline_index_rebuild():
+    """BM25 index rebuild works with graph mutations."""
+    events, _manifest, truth = generate_history_with_truth(
+        persona_id="alex", seed=77, days=14, start_date="2026-05-01"
+    )
+    graph = encode_events_to_graph(events)
+
+    idx = BM25Index()
+    idx.rebuild_from_graph(graph)
+    initial_count = idx.doc_count
+
+    # Add a new node
+    from famulix.memory_graph import MemoryNode
+
+    new_node = MemoryNode.create(
+        kind="fact",
+        title="new test fact",
+        body="this is a test fact for rebuild",
+        created_at_s=events[-1].timestamp_s + 100,
+    )
+    graph.add_node(new_node)
+
+    # Index should detect staleness
+    assert idx.needs_rebuild(graph)
+
+    # Rebuild should include new node
+    idx.rebuild_from_graph(graph)
+    assert idx.doc_count == initial_count + 1
+    assert not idx.needs_rebuild(graph)
