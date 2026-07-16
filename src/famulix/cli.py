@@ -134,6 +134,11 @@ def build_parser() -> argparse.ArgumentParser:
     # ingest
     p_ingest = sub.add_parser("ingest", help="ingest events from JSONL")
     p_ingest.add_argument("path", help="path to JSONL event file")
+    p_ingest.add_argument(
+        "--validate",
+        action="store_true",
+        help="validate schema before ingest (slower but safer)",
+    )
 
     # export
     p_export = sub.add_parser("export", help="export memory graph")
@@ -577,7 +582,23 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
     try:
         lines = Path(args.path).read_text(encoding="utf-8").splitlines()
-        events = [Event.from_envelope(Envelope.from_jsonl_line(line)) for line in lines if line]
+
+        # Validate schema if requested
+        if getattr(args, "validate", False):
+            envelopes = []
+            for i, line in enumerate(lines):
+                if not line:
+                    continue
+                try:
+                    env = Envelope.from_jsonl_line(line)
+                    envelopes.append(env)
+                except (ValueError, KeyError, TypeError) as exc:
+                    print(f"Validation error at line {i + 1}: {exc}", file=sys.stderr)
+                    return 3
+            events = [Event.from_envelope(env) for env in envelopes]
+        else:
+            events = [Event.from_envelope(Envelope.from_jsonl_line(line)) for line in lines if line]
+
         graph = encode_events_to_graph(events)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"famulix ingest: {exc}", file=sys.stderr)
