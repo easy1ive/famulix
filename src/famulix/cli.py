@@ -48,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--seed", type=int, default=0, help="random seed")
     p_eval.add_argument("--days", type=_positive_int, default=90, help="days of history")
     p_eval.add_argument("--budget", type=_positive_int, default=500, help="token budget")
+    p_eval.add_argument(
+        "--slice",
+        dest="slices",
+        action="append",
+        help="show only specific slice (can be repeated: recall, precision, etc.)",
+    )
 
     # exec-report
     sub.add_parser("exec-report", help="generate plan execution report")
@@ -257,6 +263,12 @@ def cmd_eval(args: argparse.Namespace) -> int:
         budget_tokens=args.budget,
     )
     d = scorecard.to_dict()
+
+    # Filter slices if requested
+    selected_slices = getattr(args, "slices", None)
+    if selected_slices and "slices" in d:
+        d["slices"] = {k: v for k, v in d["slices"].items() if k in selected_slices}
+
     if getattr(args, "json", False):
         print(json.dumps(d, indent=2, sort_keys=True))
     else:
@@ -265,6 +277,12 @@ def cmd_eval(args: argparse.Namespace) -> int:
             if key in ("persona_id", "seed", "days", "slices"):
                 continue
             print(f"  {key}: {val}")
+
+        # Print selected slices if any
+        if selected_slices and "slices" in d and d["slices"]:
+            print("  slices:")
+            for slice_name, slice_data in sorted(d["slices"].items()):
+                print(f"    {slice_name}: {slice_data}")
     return 0
 
 
