@@ -89,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_brief.add_argument(
         "--format", choices=["markdown", "html", "json"], default="markdown", help="output format"
     )
+    p_brief.add_argument(
+        "--section",
+        choices=["agenda", "commitments", "reminders", "memories"],
+        help="generate only specific section",
+    )
 
     # context
     p_ctx = sub.add_parser("context", help="assemble budgeted context for a query")
@@ -379,6 +384,31 @@ def cmd_brief(args: argparse.Namespace) -> int:
         output = render_briefing_html(briefing, graph=graph)
     else:
         output = render_briefing_markdown(briefing)
+
+    # Filter to specific section if requested
+    section = getattr(args, "section", None)
+    if section:
+        # Simple section filter: extract lines between section headers
+        lines = output.split("\n")
+        section_headers = {
+            "agenda": "Agenda",
+            "commitments": "Commitments",
+            "reminders": "Reminders",
+            "memories": "Recent Memories",
+        }
+        target = section_headers.get(section, section.title())
+        filtered = []
+        in_section = False
+        for line in lines:
+            if line.startswith("#") and target in line:
+                in_section = True
+                filtered.append(line)
+            elif line.startswith("#") and in_section:
+                break
+            elif in_section:
+                filtered.append(line)
+        output = "\n".join(filtered) if filtered else f"No {section} section found"
+
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(output)
