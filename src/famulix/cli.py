@@ -144,6 +144,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_export = sub.add_parser("export", help="export memory graph")
     p_export.add_argument("--format", choices=["json", "jsonl"], default="json")
     p_export.add_argument("--output", help="output file (default: stdout)")
+    p_export.add_argument(
+        "--pretty",
+        action="store_true",
+        help="pretty-print JSON output (indent=2)",
+    )
 
     # triggers
     p_trig = sub.add_parser("triggers", help="list proactive triggers")
@@ -614,6 +619,10 @@ def cmd_export(args: argparse.Namespace) -> int:
     """Export the demo memory graph."""
     graph, _now = _build_demo_graph("alex", 0, 7)
     serialized = graph.to_dict()
+
+    # Determine JSON indent
+    indent = 2 if getattr(args, "pretty", False) else None
+
     if args.format == "jsonl":
         print(json.dumps({"record_type": "graph", "schema_version": 1}, sort_keys=True))
         for node in serialized["nodes"]:
@@ -621,7 +630,7 @@ def cmd_export(args: argparse.Namespace) -> int:
         for edge in serialized["edges"]:
             print(json.dumps({"record_type": "edge", **edge}, sort_keys=True, ensure_ascii=False))
     else:
-        print(json.dumps(serialized, indent=2, sort_keys=True, ensure_ascii=False))
+        print(json.dumps(serialized, indent=indent, sort_keys=True, ensure_ascii=False))
     return 0
 
 
