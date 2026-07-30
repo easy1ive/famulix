@@ -194,6 +194,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_stats.add_argument("--seed", type=int, default=0, help="seed")
     p_stats.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_stats.add_argument("--json", action="store_true", help="output as JSON")
+    p_stats.add_argument(
+        "--verbose",
+        action="store_true",
+        help="show detailed statistics including edge kinds and node metadata",
+    )
 
     # validate-session
     p_validate = sub.add_parser("validate-session", help="validate a session recording file")
@@ -758,6 +763,21 @@ def cmd_stats(args: argparse.Namespace) -> int:
         print("Node kinds:")
         for kind, count in sorted(stats["kind_counts"].items()):
             print(f"  {kind}: {count}")
+
+        # Verbose output: edge kinds and sample metadata
+        if getattr(args, "verbose", False):
+            print("\nEdge kinds:")
+            edge_kinds: dict[str, int] = {}
+            for edge in graph.all_edges():
+                edge_kinds[edge.kind] = edge_kinds.get(edge.kind, 0) + 1
+            for kind, count in sorted(edge_kinds.items()):
+                print(f"  {kind}: {count}")
+
+            print("\nSample nodes (first 5):")
+            for node in graph.all_nodes()[:5]:
+                print(f"  [{node.kind}] {node.node_id}: {node.title[:50]}")
+                if node.metadata:
+                    print(f"    metadata: {node.metadata}")
     return 0
 
 
