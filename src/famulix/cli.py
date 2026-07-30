@@ -103,6 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_ctx.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_ctx.add_argument("--budget", type=_positive_int, default=300, help="token budget")
     p_ctx.add_argument("--json", action="store_true", help="output as JSON")
+    p_ctx.add_argument(
+        "--max-items",
+        type=_positive_int,
+        default=10,
+        help="maximum number of context items (default: 10)",
+    )
 
     # prefs
     p_prefs = sub.add_parser("prefs", help="view learned preferences")
@@ -471,7 +477,8 @@ def cmd_context(args: argparse.Namespace) -> int:
     query = args.query or "context assembly test"
     results = hybrid_score(query, graph=graph, index=idx, now_s=now_s)
     context_items: list[ContextItem] = []
-    for r in results[:20]:
+    max_items = getattr(args, "max_items", 10)
+    for r in results[: max_items * 2]:
         result_node = graph.get_node(r.node_id)
         if result_node is None:
             continue
@@ -484,6 +491,8 @@ def cmd_context(args: argparse.Namespace) -> int:
                 payload=text,
             )
         )
+        if len(context_items) >= max_items:
+            break
     assembled = assemble_context(context_items, budget=args.budget)
     print(f"Assembled context (budget={args.budget} tokens):")
     total = 0
