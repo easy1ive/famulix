@@ -121,6 +121,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_rem = sub.add_parser("remember", help="add a fact to memory")
     p_rem.add_argument("title", help="fact title")
     p_rem.add_argument("body", help="fact body")
+    p_rem.add_argument(
+        "--confidence",
+        type=float,
+        default=0.8,
+        help="confidence score 0.0-1.0 (default: 0.8)",
+    )
+    p_rem.add_argument(
+        "--tags",
+        nargs="*",
+        default=[],
+        help="tags for categorization",
+    )
 
     # forget
     p_forget = sub.add_parser("forget", help="remove a memory by id")
@@ -531,10 +543,23 @@ def cmd_remember(args: argparse.Namespace) -> int:
     """Add a fact and print its memory id."""
     from famulix.memory_graph import MemoryNode
 
-    node = MemoryNode.create(kind="fact", title=args.title, body=args.body)
+    # Build metadata from flags
+    metadata = {}
+    confidence = getattr(args, "confidence", 0.8)
+    if confidence != 0.8:
+        metadata["confidence"] = str(confidence)
+    tags = getattr(args, "tags", [])
+    if tags:
+        metadata["tags"] = ",".join(tags)
+
+    node = MemoryNode.create(kind="fact", title=args.title, body=args.body, metadata=metadata)
     print(f"Memory id: {node.node_id}")
     print(f"Title: {node.title}")
     print(f"Body: {node.body}")
+    if confidence != 0.8:
+        print(f"Confidence: {confidence:.2f}")
+    if tags:
+        print(f"Tags: {', '.join(tags)}")
     return 0
 
 
