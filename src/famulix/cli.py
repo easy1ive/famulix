@@ -156,6 +156,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_trig.add_argument("--seed", type=int, default=0, help="seed")
     p_trig.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_trig.add_argument("--json", action="store_true", help="output as JSON")
+    p_trig.add_argument(
+        "--active-only",
+        action="store_true",
+        help="show only active (non-expired) triggers",
+    )
 
     # privacy
     p_priv = sub.add_parser("privacy", help="privacy and redaction tools")
@@ -640,6 +645,11 @@ def cmd_triggers(args: argparse.Namespace) -> int:
 
     graph, now_s = _build_demo_graph(args.persona, args.seed, args.days)
     triggers = generate_triggers(graph, now_s=now_s)
+
+    # Filter to active-only if requested
+    if getattr(args, "active_only", False):
+        triggers = [t for t in triggers if t.trigger_time_s >= now_s]
+
     print(f"Generated {len(triggers)} triggers:")
     for t in triggers[:20]:
         print(f"  [{t.trigger_time_s}] {t.reason} (memory={t.memory_id})")
