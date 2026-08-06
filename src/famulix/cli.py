@@ -193,6 +193,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_diff = sub.add_parser("diff", help="diff two session recordings")
     p_diff.add_argument("path_a", help="first session path")
     p_diff.add_argument("path_b", help="second session path")
+    p_diff.add_argument("--json", action="store_true", help="output diff as JSON (default)")
+    p_diff.add_argument(
+        "--summary",
+        action="store_true",
+        help="show human-readable summary instead of JSON",
+    )
 
     # stats
     p_stats = sub.add_parser("stats", help="show memory graph statistics")
@@ -736,7 +742,21 @@ def cmd_diff(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         print(f"famulix diff: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(session_diff(left, right), indent=2, sort_keys=True))
+
+    diff_result = session_diff(left, right)
+
+    if getattr(args, "summary", False):
+        # Human-readable summary
+        print(f"Session diff: {args.path_a} vs {args.path_b}")
+        print(f"  Left frames:  {len(left.entries)}")
+        print(f"  Right frames: {len(right.entries)}")
+        print(f"  Identical:    {diff_result.get('identical', False)}")
+        if not diff_result.get("identical", False):
+            print(f"  Differences:  {len(diff_result.get('differences', []))}")
+            for diff in diff_result.get("differences", [])[:5]:
+                print(f"    - {diff}")
+    else:
+        print(json.dumps(diff_result, indent=2, sort_keys=True))
     return 0
 
 
