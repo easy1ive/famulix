@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--days", type=_positive_int, default=14, help="days of history (default: 14)"
     )
     p_demo.add_argument("--json", action="store_true", help="output as JSON")
+    p_demo.add_argument(
+        "--quiet",
+        action="store_true",
+        help="suppress verbose output (show only metrics)",
+    )
 
     # eval
     p_eval = sub.add_parser("eval", help="run evaluation on a synthetic persona")
@@ -298,7 +303,9 @@ def cmd_demo(args: argparse.Namespace) -> int:
     if getattr(args, "json", False):
         print(json.dumps(d, indent=2, sort_keys=True))
     else:
-        print(f"famulix demo — persona={d['persona_id']} seed={d['seed']} days={d['days']}")
+        quiet = getattr(args, "quiet", False)
+        if not quiet:
+            print(f"famulix demo — persona={d['persona_id']} seed={d['seed']} days={d['days']}")
         print(f"  Planted facts:      {d['total_planted_facts']}")
         print(f"  Contradictions:     {d['total_contradiction_pairs']}")
         print(f"  Recall@5:           {d['recall_at_k']['@5']:.4f}")
