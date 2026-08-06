@@ -41,7 +41,7 @@ def main():
         persona_id="alex",
         seed=42,
         days=14,
-        budget=500,
+        budget_tokens=500,
     )
     scorecard_dict = scorecard.to_dict()
     eval_report = format_evaluation_report(scorecard_dict, include_details=True)
