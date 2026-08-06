@@ -153,6 +153,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_forget.add_argument("--days", type=int, default=30, help="history days")
     p_forget.add_argument("--reason", default="user request", help="deletion reason")
     p_forget.add_argument("--json", action="store_true", help="JSON output")
+    p_forget.add_argument(
+        "--no-cascade",
+        action="store_true",
+        help="delete only the specified memory (skip cascade)",
+    )
 
     # ingest
     p_ingest = sub.add_parser("ingest", help="ingest events from JSONL")
@@ -611,6 +616,19 @@ def cmd_forget(args: argparse.Namespace) -> int:
     if is_deleted(graph, memory_id):
         print(f"Error: memory '{memory_id}' already deleted", file=sys.stderr)
         return 1
+
+    # Check if cascade is disabled
+    no_cascade = getattr(args, "no_cascade", False)
+    if no_cascade:
+        # Simple deletion: just mark as inactive
+        from dataclasses import replace
+
+        node = graph.get_node(memory_id)
+        graph._nodes[memory_id] = replace(node, is_active=False)  # noqa: SLF001
+        idx.remove(memory_id)
+        print(f"Deleted memory (no cascade): {memory_id}")
+        print(f"  reason: {args.reason}")
+        return 0
 
     report = delete_memory(graph, memory_id)
     idx.remove(memory_id)
