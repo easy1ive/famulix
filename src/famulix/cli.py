@@ -99,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["agenda", "commitments", "reminders", "memories"],
         help="generate only specific section",
     )
+    p_brief.add_argument(
+        "--no-metadata",
+        action="store_true",
+        help="omit run metadata from briefing output",
+    )
 
     # context
     p_ctx = sub.add_parser("context", help="assemble budgeted context for a query")
@@ -469,6 +474,12 @@ def cmd_brief(args: argparse.Namespace) -> int:
             elif in_section:
                 filtered.append(line)
         output = "\n".join(filtered) if filtered else f"No {section} section found"
+
+    # Remove metadata if requested
+    if getattr(args, "no_metadata", False):
+        lines = output.split("\n")
+        filtered = [line for line in lines if "Run metadata:" not in line and "seed=" not in line]
+        output = "\n".join(filtered)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
