@@ -116,6 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_prefs.add_argument("--seed", type=int, default=0, help="seed")
     p_prefs.add_argument("--days", type=_positive_int, default=30, help="days of history")
     p_prefs.add_argument("--json", action="store_true", help="output as JSON")
+    p_prefs.add_argument(
+        "--learned-only",
+        action="store_true",
+        help="show only learned preferences (exclude cold-start defaults)",
+    )
 
     # prefs-report
     p_prefs_report = sub.add_parser("prefs-report", help="generate preference profile report")
@@ -529,6 +534,11 @@ def cmd_prefs(args: argparse.Namespace) -> int:
         )
     now_s = len(truth["preference_signals"]) * 3600
     prefs = profile.current_preferences(now_s)
+
+    # Filter to learned-only if requested (confidence > 0)
+    if getattr(args, "learned_only", False):
+        prefs = {k: (v, c) for k, (v, c) in prefs.items() if c > 0.0}
+
     print(f"Learned preferences ({len(prefs)} keys):")
     for key, (value, conf) in sorted(prefs.items()):
         print(f"  {key}: {value} (confidence: {conf:.3f})")
