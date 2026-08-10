@@ -169,6 +169,23 @@ class SessionRecorder:
         text = self.to_jsonl()
         return hashlib.sha256(text.encode()).hexdigest()
 
+    def resume_from_offset(self, offset: int) -> SessionRecorder:
+        """Create a new recorder replaying events from a given offset.
+
+        The new recorder contains events from [offset:] with re-indexed
+        sequence numbers. Useful for crash-resume scenarios.
+        """
+        if offset < 0 or offset > len(self.entries):
+            raise ValueError(f"offset {offset} out of range [0, {len(self.entries)}]")
+        resumed = SessionRecorder(session_id=self.session_id, seed=self.seed)
+        for entry in self.entries[offset:]:
+            resumed.record(
+                kind=entry["kind"],
+                payload=entry["payload"],
+                timestamp_s=entry["timestamp_s"],
+            )
+        return resumed
+
 
 def validate_session(recorder: SessionRecorder) -> dict[str, Any]:
     """Validate the integrity of a session recording.
