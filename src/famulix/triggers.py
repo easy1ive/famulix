@@ -325,3 +325,21 @@ def is_quiet_hours(hour: int, quiet_start: int = 22, quiet_end: int = 8) -> bool
         return hour >= quiet_start or hour < quiet_end
     else:
         return quiet_start <= hour < quiet_end
+
+
+def suppress_covered(
+    pending_triggers: list[dict[str, object]],
+    briefing_memory_ids: set[str],
+) -> list[dict[str, object]]:
+    """Suppress triggers whose reminder is already covered in the briefing.
+
+    A trigger is suppressed if its ``source_memory_id`` is in the briefing set.
+    Returns only the triggers that should fire.
+    """
+    result: list[dict[str, object]] = []
+    for trigger in pending_triggers:
+        source_id = trigger.get("source_memory_id", "")
+        if source_id and source_id in briefing_memory_ids:
+            continue
+        result.append(trigger)
+    return result
