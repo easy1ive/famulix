@@ -272,3 +272,39 @@ def retention_diagnostics(
         "tier_counts": tier_counts,
         "protected_count": protected_count,
     }
+
+
+def simulate_steady_state(
+    tier_thresholds: dict[str, float] | None = None,
+    total_memories: int = 1000,
+    seed: int = 42,
+) -> dict[str, int]:
+    """Simulate steady-state memory distribution across retention tiers.
+
+    Generates memories with random salience and assigns them to tiers based
+    on thresholds. Runs until distribution stabilizes (change < 1% per cycle).
+    Returns the count of memories in each tier at steady state.
+    """
+    import random
+
+    rng = random.Random(seed)
+    if tier_thresholds is None:
+        tier_thresholds = {"hot": 0.8, "warm": 0.5, "cold": 0.2, "archive": 0.0}
+
+    tiers = sorted(tier_thresholds.keys(), key=lambda t: -tier_thresholds[t])
+    counts: dict[str, int] = {t: 0 for t in tiers}
+    saliences = [rng.random() for _ in range(total_memories)]
+
+    for _ in range(100):
+        old_counts = dict(counts)
+        counts = {t: 0 for t in tiers}
+        for s in saliences:
+            for t in tiers:
+                if s >= tier_thresholds[t]:
+                    counts[t] += 1
+                    break
+        total_change = sum(abs(counts[t] - old_counts[t]) for t in tiers)
+        if total_change < total_memories * 0.01:
+            break
+
+    return counts
