@@ -15,6 +15,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from time import perf_counter
+from typing import Any
 
 from famulix.memory_graph import MemoryEdge, MemoryGraph, MemoryNode
 
@@ -529,3 +530,17 @@ def extract_fact_key(text: str) -> str:
     words = text.lower().split()
     content_words = [w for w in words if w not in stop_words and len(w) > 2]
     return " ".join(sorted(content_words[:5]))
+
+
+def resolve_tie_by_trust(a: dict[str, Any], b: dict[str, Any]) -> str:
+    """Resolve a contradiction tie by source trust then deterministic id.
+
+    Returns the id of the winner. Trust levels: high=3, medium=2, low=1.
+    Ties in trust are broken by lexicographic id ordering (lower wins).
+    """
+    trust_map = {"high": 3, "medium": 2, "low": 1}
+    a_trust = trust_map.get(a.get("trust", "medium"), 2)
+    b_trust = trust_map.get(b.get("trust", "medium"), 2)
+    if a_trust != b_trust:
+        return a["id"] if a_trust > b_trust else b["id"]
+    return a["id"] if a["id"] <= b["id"] else b["id"]
