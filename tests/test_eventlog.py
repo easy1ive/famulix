@@ -127,7 +127,7 @@ def test_v1_database_migrates_and_backfills_source(tmp_path: Path) -> None:
         ).fetchone()[0]
 
     assert source_row == ("legacy-chat",)
-    assert schema_version == 3
+    assert schema_version == 4
 
 
 def test_sources_returns_distinct_sorted() -> None:
@@ -228,7 +228,7 @@ def test_schema_version_returns_latest() -> None:
 
 
 def test_migration_history_records_transitions(tmp_path: Path) -> None:
-    """A fresh v1 database migrating to v3 should log both transitions."""
+    """A fresh v1 database migrating to v4 should log all transitions."""
     db_path = tmp_path / "test.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute(
@@ -243,12 +243,15 @@ def test_migration_history_records_transitions(tmp_path: Path) -> None:
 
     with EventLog(db_path) as log:
         history = log.migration_history()
-        assert len(history) == 2
+        assert len(history) == 3
         assert history[0]["from"] == 1
         assert history[0]["to"] == 2
         assert history[1]["from"] == 2
         assert history[1]["to"] == 3
-        assert log.schema_version() == 3
+        assert history[2]["from"] == 3
+        assert history[2]["to"] == 4
+        assert history[1]["to"] == 3
+        assert log.schema_version() == 4
 
 
 def test_future_schema_version_rejected(tmp_path: Path) -> None:

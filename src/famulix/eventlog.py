@@ -16,7 +16,7 @@ from pathlib import Path
 from famulix.envelope import Envelope
 from famulix.events import Event
 
-LATEST_SCHEMA_VERSION = 3
+LATEST_SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS event_log (
@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS event_log (
     envelope_json TEXT NOT NULL,
     checksum TEXT NOT NULL,
     inserted_at_s INTEGER NOT NULL,
-    source TEXT NOT NULL DEFAULT ''
+    source TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    content_hash TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_event_log_id ON event_log(event_id);
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -59,9 +61,24 @@ def _migrate_v2_to_v3(cur: sqlite3.Cursor) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_event_log_inserted ON event_log(inserted_at_s)")
 
 
+def _migrate_v3_to_v4(cur: sqlite3.Cursor) -> None:
+    """Add content_hash column for fast integrity verification (v3 → v4)."""
+    import hashlib
+
+    columns = {row[1] for row in cur.execute("PRAGMA table_info(event_log)")}
+    if "content_hash" not in columns:
+        cur.execute("ALTER TABLE event_log ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''")
+        frames = cur.execute("SELECT seq, envelope_json FROM event_log").fetchall()
+        for seq, envelope_line in frames:
+            digest = hashlib.sha256(envelope_line.encode()).hexdigest()[:16]
+            cur.execute("UPDATE event_log SET content_hash = ? WHERE seq = ?", (digest, seq))
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_event_log_hash ON event_log(content_hash)")
+
+
 MIGRATIONS: dict[tuple[int, int], Callable[[sqlite3.Cursor], None]] = {
     (1, 2): _migrate_v1_to_v2,
     (2, 3): _migrate_v2_to_v3,
+    (3, 4): _migrate_v3_to_v4,
 }
 
 
