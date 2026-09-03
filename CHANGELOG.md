@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-11-12
+
+### Added
+- Consolidation tie-breaking with source trust and deterministic id ordering
+- Decay steady-state simulation with configurable tier thresholds
+- Deletion non-resurrection invariant across recall, context, and export paths
+- Session replay checkpoint resume at arbitrary event offset
+- Trigger suppression when briefing already covers the reminder item
+- Eventlog schema v4 migration with content_hash column
+- Preference calibration reliability bins and error measurement
+- Privacy tier enforcement leak matrix with deny-by-default
+- Policy conflict diagnostics with precedence detection
+- End-to-end pipeline integration tests (ingest → consolidate → recall → brief)
+- Performance measurement for recall latency on 90-day persona
+
+### Fixed
+- Examples 06, 07, 09 corrected to match current API signatures
+
 ## [0.1.4] - 2026-11-12
 
 ### Fixed
