@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "famulix"
-version = "0.1.4"
+version = "0.1.5"
 description = "Offline personal-agent framework centered on long-term memory and personalization"
 readme = "README.md"
 requires-python = ">=3.11"
