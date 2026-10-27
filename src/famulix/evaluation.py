@@ -491,7 +491,7 @@ def compute_per_slice_scorecard(
 
     slices: dict[str, list[dict]] = {}
     for r in results:
-        slice_name = r["slice"]
+        slice_name = str(r["slice"])
         if slice_name not in slices:
             slices[slice_name] = []
         slices[slice_name].append(r)

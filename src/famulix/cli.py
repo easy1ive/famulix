@@ -641,8 +641,15 @@ def cmd_forget(args: argparse.Namespace) -> int:
         # Simple deletion: just mark as inactive
         from dataclasses import replace
 
-        node = graph.get_node(memory_id)
-        graph._nodes[memory_id] = replace(node, is_active=False)  # noqa: SLF001
+        from famulix.memory_graph import MemoryNode
+
+        target_opt = graph.get_node(memory_id)
+        if target_opt is None:
+            print(f"Memory not found: {memory_id}", file=sys.stderr)
+            return 1
+        target: MemoryNode = target_opt
+        updated: MemoryNode = replace(target, is_active=False)
+        graph._nodes[memory_id] = updated  # noqa: SLF001
         idx.remove(memory_id)
         print(f"Deleted memory (no cascade): {memory_id}")
         print(f"  reason: {args.reason}")
