@@ -541,6 +541,8 @@ def resolve_tie_by_trust(a: dict[str, Any], b: dict[str, Any]) -> str:
     trust_map = {"high": 3, "medium": 2, "low": 1}
     a_trust = trust_map.get(a.get("trust", "medium"), 2)
     b_trust = trust_map.get(b.get("trust", "medium"), 2)
+    a_id = str(a["id"])
+    b_id = str(b["id"])
     if a_trust != b_trust:
-        return a["id"] if a_trust > b_trust else b["id"]
-    return a["id"] if a["id"] <= b["id"] else b["id"]
+        return a_id if a_trust > b_trust else b_id
+    return a_id if a_id <= b_id else b_id
