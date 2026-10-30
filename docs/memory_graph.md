@@ -100,6 +100,7 @@ Graphs can be serialized to JSON for persistence:
 ```python
 data = graph.to_dict()
 import json
+
 json_str = json.dumps(data)
 
 # Reload

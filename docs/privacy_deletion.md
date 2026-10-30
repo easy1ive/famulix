@@ -56,14 +56,16 @@ The `PolicyEngine` evaluates access requests:
 from famulix.privacy import PolicyEngine, PolicyRule
 
 engine = PolicyEngine(default_effect="deny")
-engine.add_rule(PolicyRule(
-    id="allow-public-read",
-    effect="allow",
-    actions={"read"},
-    resources=set(),  # wildcard
-    tiers={"public"},
-    priority=10,
-))
+engine.add_rule(
+    PolicyRule(
+        id="allow-public-read",
+        effect="allow",
+        actions={"read"},
+        resources=set(),  # wildcard
+        tiers={"public"},
+        priority=10,
+    )
+)
 
 decision, rule_id = engine.evaluate(
     action="read",

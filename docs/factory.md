@@ -76,7 +76,7 @@ truth = {
     "contradiction_pairs": [("evt_old", "evt_new"), ...],
     "preference_signals": [
         {"event_id": "evt_xyz", "key": "tone", "value": "concise", "rating": 0.9},
-        ...
+        ...,
     ],
 }
 ```
@@ -165,6 +165,7 @@ Small factory outputs (days=1-3) serve as golden fixtures for regression tests:
 events, manifest = generate_history(persona_id="alex", seed=0, days=1)
 # Save as golden fixture
 import json
+
 with open("golden_alex_1day.json", "w") as f:
     json.dump([e.to_dict() for e in events], f)
 ```

@@ -10,6 +10,7 @@ Connectors implement a common interface:
 ```python
 from famulix.connectors import Connector
 
+
 class Connector:
     def gather(self, date_range: tuple[str, str]) -> list[Event]:
         """Gather events from the source."""
