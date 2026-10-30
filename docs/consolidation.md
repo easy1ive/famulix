@@ -96,6 +96,7 @@ Reports can be serialized to dict/JSON:
 ```python
 data = report.to_dict()
 import json
+
 json_str = json.dumps(data)
 ```
 

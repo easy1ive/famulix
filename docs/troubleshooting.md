@@ -56,8 +56,7 @@ Mark genuinely slow tests with `@pytest.mark.slow`:
 
 ```python
 @pytest.mark.slow
-def test_large_scale():
-    ...
+def test_large_scale(): ...
 ```
 
 Run fast tests only:

@@ -11,20 +11,22 @@ Tools are declared with schema, capabilities, and side-effect class:
 from famulix.tools import Tool, ToolRegistry
 
 registry = ToolRegistry()
-registry.register(Tool(
-    name="recall",
-    description="Search memory graph for relevant facts",
-    parameters={
-        "type": "object",
-        "properties": {
-            "query": {"type": "string", "description": "Search query"},
-            "k": {"type": "integer", "default": 10},
+registry.register(
+    Tool(
+        name="recall",
+        description="Search memory graph for relevant facts",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "k": {"type": "integer", "default": 10},
+            },
+            "required": ["query"],
         },
-        "required": ["query"],
-    },
-    capabilities={"read", "retrieval"},
-    side_effects="none",  # none, local, external
-))
+        capabilities={"read", "retrieval"},
+        side_effects="none",  # none, local, external
+    )
+)
 ```
 
 ### Side-Effect Classification
