@@ -1,6 +1,7 @@
 """Smoke-test a built wheel in an isolated venv.
 
-Usage: python scripts/check_package.py dist/famulix-0.1.0-py3-none-any.whl
+Usage: python scripts/check_package.py [wheel-path]
+With no argument, the newest wheel under dist/ is used.
 
 Uses only stdlib + pip, so it works in bare slim containers.
 """
@@ -14,11 +15,20 @@ import tempfile
 from pathlib import Path
 
 
+def _newest_wheel() -> Path | None:
+    root = Path(__file__).resolve().parent.parent
+    wheels = sorted(root.glob("dist/*.whl"), key=lambda p: p.stat().st_mtime)
+    return wheels[-1] if wheels else None
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) < 2:
-        print("usage: check_package.py <wheel-path>", file=sys.stderr)
-        return 2
-    wheel = Path(argv[1]).resolve()
+    if len(argv) >= 2:
+        wheel = Path(argv[1]).resolve()
+    else:
+        wheel = _newest_wheel()
+        if wheel is None:
+            print("no wheel found under dist/; build first", file=sys.stderr)
+            return 2
     if not wheel.exists():
         print(f"wheel not found: {wheel}", file=sys.stderr)
         return 2
