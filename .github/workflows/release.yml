@@ -25,7 +25,7 @@ jobs:
           .venv/bin/python -m build --wheel --no-isolation
           .venv/bin/python -m build --sdist --no-isolation
       - name: Upload artifacts to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/*.whl
